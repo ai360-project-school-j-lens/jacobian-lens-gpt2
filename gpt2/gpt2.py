@@ -35,9 +35,6 @@ class GPT2LensModel(LensModel):
     with respect to activations).
     """
 
-    def __init__(self) -> None:
-        pass
-
     def __init__(self, hf_model: transformers.GPT2LMHeadModel, tokenizer: Any) -> None:
         hf_model.eval()
         for param in hf_model.parameters():
@@ -82,10 +79,10 @@ class GPT2LensModel(LensModel):
         ids = [self.tokenizer.bos_token_id, *ids]
         return torch.tensor([ids], device=self.input_device)
 
-    def forward(self, input_ids: torch.Tensor) -> Any:
+    def forward(self, input_ids: torch.Tensor, output_hidden_states : bool = False) -> Any:
         # Runs wte + wpe -> h[0..n-1] -> ln_f; the lens reads block outputs via
         # hooks on self.layers, so the returned value is unused by jlens.
-        return self.body(input_ids=input_ids, use_cache=False)
+        return self.body(input_ids=input_ids, use_cache=False, output_hidden_states=output_hidden_states)
 
     def unembed(self, residual: torch.Tensor) -> torch.Tensor:
         weight = self._lm_head.weight
