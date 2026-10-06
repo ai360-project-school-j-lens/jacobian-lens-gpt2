@@ -934,15 +934,6 @@ http = [
 ]
 
 [[package]]
-name = "gpt2"
-version = "0.0.4"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/f6/67/0c8e52c7afea23dafe3d7c7936ab2450a2c1b66d60a230e558ce76e30167/gpt2-0.0.4.tar.gz", hash = "sha256:faa5c77c2e9dab8dc6acb69618f5032b5c84ffe6f44f64fd3ee6256a48ee0fe3", size = 2656, upload-time = "2019-08-30T16:20:50.349Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/e9/d1/7d251f8150d0f6b28e90ccdf36637c4c7af7263d9469ae3a959f36c9cf81/gpt2-0.0.4-py3-none-any.whl", hash = "sha256:5b3b4c2911d4cb68195646c5d841357a7c4153fa6c98422204218218088de89f", size = 4075, upload-time = "2019-08-30T16:20:49.237Z" },
-]
-
-[[package]]
 name = "h11"
 version = "0.16.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1232,7 +1223,6 @@ name = "jlens"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
-    { name = "gpt2" },
     { name = "huggingface-hub" },
     { name = "jupyter" },
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
@@ -1251,7 +1241,6 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "datasets", marker = "extra == 'dev'" },
-    { name = "gpt2", specifier = ">=0.0.4" },
     { name = "huggingface-hub" },
     { name = "jupyter", specifier = ">=1.1.1" },
     { name = "numpy" },
