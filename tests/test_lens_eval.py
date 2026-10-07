@@ -34,7 +34,7 @@ NOTEBOOK = REPO / "notebooks/jacobian_lens/jacobian_logit_lens_dataset.ipynb"
 class _AsciiTokenizer:
     bos_token_id = 128
 
-    def encode(self, text):
+    def encode(self, text, *, add_special_tokens=False):
         return [ord(char) % 128 for char in text]
 
     def __call__(self, text):
