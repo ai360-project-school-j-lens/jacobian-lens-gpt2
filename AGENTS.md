@@ -36,3 +36,7 @@ History uses short descriptive subjects, such as `Switch notebooks to GPT-2 XL, 
 ## Experiment Configuration
 
 Keep weights, `.pt` checkpoints, credentials, and downloaded corpora out of commits. Fit on independent corpora; merge only disjoint shards from the same model and fitting configuration. Record model ID, dtype, corpus mix, sequence length, and dimension batch size with experiment results.
+
+## Other notes
+
+NEVER use Russian in READMEs or comments.
