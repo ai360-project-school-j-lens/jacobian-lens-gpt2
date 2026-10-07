@@ -362,58 +362,75 @@ def evaluate_readout(gpt: GPT2LensModel, lens: Lens, dataset: str, items: list[d
       model's top-1, the share of positions where the layer top-1 is the input token itself
       (``copy_rate``) and KL(model || layer).
     """
-    tok = gpt.tokenizer
-    expand = dataset == "order-ops"
     word_rows, item_rows = [], []
     for i, item in enumerate(tqdm(items, desc=dataset, leave=False)):
         prompt = item["prompt"].rstrip()
         ids = gpt.encode(prompt)[0].tolist()
-        logits = lens(prompt)
-        position = readout_position(tok, ids, dataset)
-        readout = logits[:, position]  # [n_layers, vocab]
+        rows, row = _readout_rows(gpt, lens(prompt), dataset, items, i, ids)
+        word_rows.extend(rows)
+        item_rows.append(row)
+    return pd.DataFrame(word_rows), pd.DataFrame(item_rows)
 
-        other = items[(i + len(items) // 2) % len(items)]["intermediates"]
-        words = [("intermediate", word, role) for role, word in enumerate(item["intermediates"])]
-        words += [("control", word, role) for role, word in enumerate(other) if word not in item["intermediates"]]
-        if "target" in item:
-            words.append(("target", item["target"], 0))
-        prompt_ids = set(ids[1:])
-        for kind, word, role in words:
-            word_ids = spelling_ids(tok, word, expand)
-            ranks = token_ranks(readout, word_ids).min(-1).values.cpu().numpy()
-            word_rows.append({
-                "dataset": dataset,
-                "item": item["name"],
-                "kind": kind,
-                "word": word,
-                "role": role,
-                "single_token": bool(single_token_ids(tok, word, expand)),
-                "in_prompt": bool(word_ids & prompt_ids),
-                "ranks": ranks,
-                "best_rank": int(ranks.min()),
-                "best_layer": int(ranks.argmin()),
-            })
 
-        # общая картина по всем позициям промпта, кроме <|endoftext|>
-        top1 = logits[:, 1:].argmax(-1)  # [n_layers, seq_len - 1]
-        log_probs = logits[:, 1:].log_softmax(-1)
-        kl = (log_probs[-1].exp() * (log_probs[-1] - log_probs)).sum(-1).mean(-1)
-        input_ids = torch.tensor(ids[1:], device=top1.device)
-        model_top1 = int(readout[-1].argmax())
-        item_rows.append({
+def _readout_rows(
+    gpt: GPT2LensModel,
+    logits: torch.Tensor,
+    dataset: str,
+    items: list[dict],
+    i: int,
+    ids: list[int],
+) -> tuple[list[dict], dict]:
+    """The shared evaluation protocol, independent of how logits were obtained."""
+    tok = gpt.tokenizer
+    expand = dataset == "order-ops"
+    item = items[i]
+    prompt = item["prompt"].rstrip()
+    word_rows = []
+    position = readout_position(tok, ids, dataset)
+    readout = logits[:, position]  # [n_layers, vocab]
+
+    other = items[(i + len(items) // 2) % len(items)]["intermediates"]
+    words = [("intermediate", word, role) for role, word in enumerate(item["intermediates"])]
+    words += [("control", word, role) for role, word in enumerate(other) if word not in item["intermediates"]]
+    if "target" in item:
+        words.append(("target", item["target"], 0))
+    prompt_ids = set(ids[1:])
+    for kind, word, role in words:
+        word_ids = spelling_ids(tok, word, expand)
+        ranks = token_ranks(readout, word_ids).min(-1).values.cpu().numpy()
+        word_rows.append({
             "dataset": dataset,
             "item": item["name"],
-            "prompt": prompt,
-            "target": item.get("target"),
-            "readout_token": tok.decode([ids[position]]),
-            "model_top1": tok.decode([model_top1]),
-            "model_correct": model_top1 in spelling_ids(tok, item["target"]) if "target" in item else None,
-            "readout_top1": [tok.decode([t]) for t in readout.argmax(-1).tolist()],
-            "agreement": (top1 == top1[-1]).float().mean(-1).cpu().numpy(),
-            "copy_rate": (top1 == input_ids).float().mean(-1).cpu().numpy(),
-            "kl_to_final": kl.cpu().numpy(),
+            "kind": kind,
+            "word": word,
+            "role": role,
+            "single_token": bool(single_token_ids(tok, word, expand)),
+            "in_prompt": bool(word_ids & prompt_ids),
+            "ranks": ranks,
+            "best_rank": int(ranks.min()),
+            "best_layer": int(ranks.argmin()),
         })
-    return pd.DataFrame(word_rows), pd.DataFrame(item_rows)
+
+    # общая картина по всем позициям промпта, кроме <|endoftext|>
+    top1 = logits[:, 1:].argmax(-1)  # [n_layers, seq_len - 1]
+    log_probs = logits[:, 1:].log_softmax(-1)
+    kl = (log_probs[-1].exp() * (log_probs[-1] - log_probs)).sum(-1).mean(-1)
+    input_ids = torch.tensor(ids[1:], device=top1.device)
+    model_top1 = int(readout[-1].argmax())
+    item_row = {
+        "dataset": dataset,
+        "item": item["name"],
+        "prompt": prompt,
+        "target": item.get("target"),
+        "readout_token": tok.decode([ids[position]]),
+        "model_top1": tok.decode([model_top1]),
+        "model_correct": model_top1 in spelling_ids(tok, item["target"]) if "target" in item else None,
+        "readout_top1": [tok.decode([t]) for t in readout.argmax(-1).tolist()],
+        "agreement": (top1 == top1[-1]).float().mean(-1).cpu().numpy(),
+        "copy_rate": (top1 == input_ids).float().mean(-1).cpu().numpy(),
+        "kl_to_final": kl.cpu().numpy(),
+    }
+    return word_rows, item_row
 
 
 def evaluate_all(
@@ -425,6 +442,59 @@ def evaluate_all(
         pd.concat([words for words, _ in frames], ignore_index=True),
         pd.concat([items for _, items in frames], ignore_index=True),
     )
+
+
+@torch.no_grad()
+def evaluate_paired(
+    gpt: GPT2LensModel,
+    lens: JacobianLens,
+    evals: dict[str, list[dict]],
+    desc: str = "paired lenses",
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Evaluate logit lens and J-lens from one set of block outputs per prompt.
+
+    Returns the same metrics as :func:`evaluate_all`, with a ``lens`` column
+    (``logit lens`` or ``J-lens``). Both use the exact same pre-ln_f residuals
+    and final model logits. Only the J-lens transports inner-layer residuals.
+    All inner layers must be fitted; silently substituting the logit lens for
+    a missing Jacobian would make the comparison misleading.
+
+    Activations are released after each prompt, and only one lens's full
+    logits tensor is kept at a time; dataset-wide vocabulary logits are not
+    cached.
+    """
+    if lens.d_model != gpt.d_model:
+        raise ValueError("lens d_model does not match the model")
+    missing = set(range(gpt.n_layers - 1)) - set(lens.source_layers)
+    if missing:
+        raise ValueError(f"J-lens is missing inner layers {sorted(missing)}")
+
+    word_rows, item_rows = [], []
+    for dataset, samples in tqdm(evals.items(), desc=desc):
+        for i, item in enumerate(tqdm(samples, desc=dataset, leave=False)):
+            input_ids = gpt.encode(item["prompt"].rstrip())
+            ids = input_ids[0].tolist()
+            with ActivationRecorder(gpt.layers, at=range(gpt.n_layers)) as recorder:
+                result = gpt.forward(input_ids)
+            # HF's last_hidden_state has already passed through ln_f.
+            final_logits = gpt._lm_head(result.last_hidden_state[0]).float()
+            del result
+            for name in ("logit lens", "J-lens"):
+                layer_logits = []
+                for layer in range(gpt.n_layers - 1):
+                    residual = recorder.activations[layer][0].float()
+                    if name == "J-lens":
+                        residual = lens.transport(residual, layer)
+                    layer_logits.append(gpt.unembed(residual).float())
+                    del residual
+                logits = torch.stack([*layer_logits, final_logits])
+                del layer_logits
+                rows, row = _readout_rows(gpt, logits, dataset, samples, i, ids)
+                word_rows.extend({**entry, "lens": name} for entry in rows)
+                item_rows.append({**row, "lens": name})
+                del logits
+            del recorder, final_logits
+    return pd.DataFrame(word_rows), pd.DataFrame(item_rows)
 
 
 def _layers(n_layers: int, layers: slice | Sequence[int] | None) -> np.ndarray:
