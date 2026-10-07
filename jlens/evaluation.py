@@ -25,9 +25,8 @@ from tqdm.auto import tqdm
 from jlens.fitting import fit
 from jlens.hooks import ActivationRecorder
 from jlens.lens import JacobianLens
-from jlens.vis import SliceData, build_page, notebook_iframe
-
 from jlens.protocol import LensModel
+from jlens.vis import SliceData, build_page, notebook_iframe
 
 Lens = Callable[[str], torch.Tensor]
 
@@ -137,7 +136,13 @@ class _FitProgress(logging.Handler):
 
     def emit(self, record: logging.LogRecord) -> None:
         message = str(record.msg)
-        if message.startswith("  prompt "):
+        if message.startswith("  jacobian forward:"):
+            seq_len, dim_batch, n_passes = record.args
+            self.bar.set_postfix(phase="forward", seq_len=seq_len, dim_batch=dim_batch, backwards=n_passes)
+        elif message.startswith("  jacobian backward:"):
+            done, total = record.args
+            self.bar.set_postfix(phase=f"backward {done}/{total}")
+        elif message.startswith("  prompt "):
             done, _, seq_len, _, seconds, _, mean_change = record.args
             self.bar.update(done - self.bar.n)
             self.bar.set_postfix(seq_len=seq_len, sec=f"{seconds:.0f}", d_mean=f"{mean_change:.1e}")
@@ -244,7 +249,8 @@ def lens_slice(model: LensModel, lens: Lens, prompt: str, top_n: int = 10, layer
     sorted_logits = logits.sort(dim=-1).values
     rank_tensor = vocab_size - torch.searchsorted(sorted_logits, logits[..., tracked], right=True)
 
-    decode = lambda t: model.tokenizer.decode([t], clean_up_tokenization_spaces=False)
+    def decode(token):
+        return model.tokenizer.decode([token], clean_up_tokenization_spaces=False)
     return SliceData(
         seq_len=seq_len,
         layers=layers,
@@ -542,7 +548,7 @@ def pass_at_k(words: pd.DataFrame, ks: Sequence[int] = (1, 5, 10, 100), layers: 
         best = ranks[:, _layers(ranks.shape[1], layers)].min(1)
         for k in ks:
             score = pd.Series(best <= k, index=group.index).groupby(group["item"]).mean().mean()
-            rows.append({**dict(zip(keys, key)), "k": k, "score": score})
+            rows.append({**dict(zip(keys, key, strict=False)), "k": k, "score": score})
     return pd.DataFrame(rows)
 
 
@@ -578,7 +584,7 @@ def plot_layer_curves(
     datasets = list(next(iter(curves.values())).index)
     nrows = math.ceil(len(datasets) / ncols)
     fig, axes = plt.subplots(nrows, ncols, figsize=(5 * ncols, 3.4 * nrows), sharex=True, squeeze=False)
-    for ax, dataset in zip(axes.flat, datasets):
+    for ax, dataset in zip(axes.flat, datasets, strict=False):
         for label, frame in curves.items():
             if dataset in frame.index:
                 ax.plot(frame.columns, frame.loc[dataset], marker="o", ms=3, label=label,
