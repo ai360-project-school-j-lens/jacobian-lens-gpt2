@@ -582,13 +582,16 @@ def plot_layer_curves(
 ) -> None:
     """A subplot per dataset, a line per entry of `curves` (each [dataset x layer])."""
     datasets = list(next(iter(curves.values())).index)
+    # Assign colors before skipping absent series so every panel matches the legend.
+    palette = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+    colors = {label: palette[i % len(palette)] for i, label in enumerate(curves)}
     nrows = math.ceil(len(datasets) / ncols)
     fig, axes = plt.subplots(nrows, ncols, figsize=(5 * ncols, 3.4 * nrows), sharex=True, squeeze=False)
     for ax, dataset in zip(axes.flat, datasets, strict=False):
         for label, frame in curves.items():
             if dataset in frame.index:
                 ax.plot(frame.columns, frame.loc[dataset], marker="o", ms=3, label=label,
-                        linestyle="--" if "control" in label else "-")
+                        color=colors[label], linestyle="--" if "control" in label else "-")
         ax.set_title(dataset)
         ax.set_xlabel("layer (last = model output)")
         ax.set_ylabel(ylabel)

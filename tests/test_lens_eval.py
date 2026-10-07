@@ -69,7 +69,7 @@ class TestPairedEvaluation(unittest.TestCase):
         self.evals = {dataset: load_eval(str(REPO), dataset)[:2] for dataset in DATASETS}
 
     def assert_frames_match(self, paired, expected, name):
-        for got, want in zip(paired, expected):
+        for got, want in zip(paired, expected, strict=True):
             got = got[got.lens == name].drop(columns="lens").reset_index(drop=True)
             # Pandas can infer optional strings differently when concatenating
             # per-dataset frames versus building the paired frame in one go.
@@ -89,7 +89,7 @@ class TestPairedEvaluation(unittest.TestCase):
             paired = evaluate_paired(self.gpt, self.lens, self.evals)
         self.assertEqual(forward.call_count, sum(map(len, self.evals.values())))
         self.assertEqual(encode.call_count, forward.call_count)
-        for layer, hooks in zip(self.gpt.layers, initial_hooks):
+        for layer, hooks in zip(self.gpt.layers, initial_hooks, strict=True):
             self.assertEqual(dict(layer._forward_hooks), hooks)
         for name, lens_fn in (
             ("logit lens", partial(logit_lens, self.gpt)),
@@ -138,6 +138,8 @@ class TestPairedEvaluation(unittest.TestCase):
             contextlib.redirect_stdout(io.StringIO()),
             contextlib.redirect_stderr(io.StringIO()),
             patch.object(plt, "show"),
+            patch("jlens.metrics.evaluate_distributions") as distributions,
+            patch("jlens.metrics.lens_vector_geometry") as geometry,
         ):
             for index, cell in enumerate(notebook.cells):
                 if cell.cell_type != "code":
@@ -153,3 +155,59 @@ class TestPairedEvaluation(unittest.TestCase):
         self.assertEqual(len(namespace["head_to_head"]), len(namespace["inter"]) // 2)
         self.assertTrue(any("single-token" in line for line in namespace["lines"]))
         self.assertTrue(any("inner-layer pass@" in line for line in namespace["lines"]))
+        distributions.assert_not_called()
+        geometry.assert_not_called()
+        self.assertIsNone(namespace["held_out_metrics"])
+        self.assertIsNone(namespace["fig55"])
+        self.assertIsNone(namespace["fig56"])
+
+    def test_reference_section_opt_in_uses_supplied_texts_and_cached_plots(self):
+        notebook = nbformat.read(NOTEBOOK, as_version=4)
+        cells = {cell.id: cell.source for cell in notebook.cells}
+        words, _ = evaluate_paired(self.gpt, self.lens, self.evals)
+        namespace = {
+            "gpt": self.gpt, "fitted_lens": self.lens, "words": words,
+            "plt": plt, "torch": torch, "display": lambda *args: None,
+        }
+
+        def run(cell_id):
+            exec(compile(cells[cell_id], cell_id, "exec"), namespace)
+
+        with (
+            contextlib.redirect_stdout(io.StringIO()),
+            contextlib.redirect_stderr(io.StringIO()),
+            patch.object(plt, "show"),
+            patch.object(self.gpt, "forward", wraps=self.gpt.forward) as forward,
+            patch.object(self.gpt, "encode", wraps=self.gpt.encode) as encode,
+        ):
+            run("reference-52")
+            run("reference-heldout-config")
+            run("reference-heldout-evaluate")
+            run("reference-heldout-plot")
+            forward.assert_not_called()
+            namespace["HELD_OUT_TEXTS"] = ["independent passage", "a second passage"]
+            # Explicit sample provenance is required before extra inference.
+            with self.assertRaisesRegex(ValueError, "HELD_OUT_SOURCE"):
+                run("reference-heldout-evaluate")
+            forward.assert_not_called()
+            namespace["HELD_OUT_SOURCE"] = "synthetic independent test strings"
+            run("reference-heldout-evaluate")
+            self.assertEqual(forward.call_count, 2)
+            self.assertEqual([call.args[0] for call in encode.call_args_list],
+                             namespace["HELD_OUT_TEXTS"])
+            metrics = namespace["held_out_metrics"]
+            self.assertEqual(len(metrics.layers), 2 * self.gpt.n_layers)
+            self.assertEqual(set(metrics.layers.layer), set(range(self.gpt.n_layers)))
+            run("reference-heldout-plot")
+            run("reference-heldout-plot")  # Cached-table plotting must not infer again.
+            self.assertEqual(forward.call_count, 2)
+            self.assertEqual(len(namespace["fig55"].axes), 3)
+            self.assertEqual(len(namespace["fig56"].axes), 3)
+            # Disabling after a successful evaluation must not reuse old metrics.
+            run("reference-heldout-config")
+            run("reference-heldout-evaluate")
+            run("reference-heldout-plot")
+            self.assertIsNone(namespace["held_out_metrics"])
+            self.assertIsNone(namespace["fig55"])
+            self.assertIsNone(namespace["fig56"])
+        plt.close("all")
