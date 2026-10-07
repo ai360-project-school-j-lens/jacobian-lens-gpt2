@@ -12,6 +12,7 @@ Bind the model (and the fitted lens) with ``functools.partial``::
 from __future__ import annotations
 
 import json
+import logging
 import math
 import os
 from collections.abc import Callable, Sequence
@@ -23,6 +24,7 @@ import torch
 from IPython.display import display
 from tqdm.auto import tqdm
 
+from jlens.fitting import fit
 from jlens.hooks import ActivationRecorder
 from jlens.lens import JacobianLens
 from jlens.vis import SliceData, build_page, notebook_iframe
@@ -104,8 +106,10 @@ def load_fit_prompts(mix: dict[str, int] = FIT_MIX, *, min_chars: int = 200, see
     from datasets import load_dataset
 
     rows = []
+    bar = tqdm(total=sum(mix.values()), desc="fit corpus", unit="prompt")
     for source, n in mix.items():
         path, config, split, text_of, stride = FIT_SOURCES[source]
+        bar.set_postfix(source=source)
         texts = []
         try:
             seen = 0
@@ -115,13 +119,54 @@ def load_fit_prompts(mix: dict[str, int] = FIT_MIX, *, min_chars: int = 200, see
                     continue
                 if seen % stride == 0:
                     texts.append(text)
+                    bar.update()
                     if len(texts) == n:
                         break
                 seen += 1
         except Exception as error:
             print(f"{source}: skipped after {len(texts)} prompts ({type(error).__name__}: {error})")
         rows += [{"source": source, "text": text} for text in texts]
+    bar.close()
     return pd.DataFrame(rows).sample(frac=1, random_state=seed).reset_index(drop=True)
+
+
+class _FitProgress(logging.Handler):
+    """Moves a tqdm bar along the per-prompt log records of ``jlens.fit``."""
+
+    def __init__(self, bar: tqdm) -> None:
+        super().__init__(logging.INFO)
+        self.bar = bar
+
+    def emit(self, record: logging.LogRecord) -> None:
+        message = str(record.msg)
+        if message.startswith("  prompt "):
+            done, _, seq_len, _, seconds, _, mean_change = record.args
+            self.bar.update(done - self.bar.n)
+            self.bar.set_postfix(seq_len=seq_len, sec=f"{seconds:.0f}", d_mean=f"{mean_change:.1e}")
+        elif message.startswith("  resuming"):
+            self.bar.update(record.args[0] - self.bar.n)
+        elif message.startswith("  skipping prompt"):
+            self.bar.update(record.args[0] + 1 - self.bar.n)
+
+
+def fit_with_progress(model: GPT2LensModel, prompts: Sequence[str], **fit_kwargs) -> JacobianLens:
+    """``jlens.fit`` with a tqdm bar over prompts.
+
+    Postfix: seconds per prompt and ``d_mean`` — relative shift of the running mean of J
+    (falls ~1/n once the lens has converged).
+    """
+    # fit пишет строку лога на каждый промпт — по ним и двигаем бар
+    logger = logging.getLogger("jlens.fitting")
+    level = logger.level
+    logger.setLevel(logging.INFO)
+    with tqdm(total=len(prompts), desc="fit J-lens", unit="prompt") as bar:
+        handler = _FitProgress(bar)
+        logger.addHandler(handler)
+        try:
+            return fit(model, prompts, **fit_kwargs)
+        finally:
+            logger.removeHandler(handler)
+            logger.setLevel(level)
 
 
 # --------------------------------------------------------------------------- #
@@ -170,10 +215,17 @@ def identity_lens(gpt: GPT2LensModel) -> JacobianLens:
 # --------------------------------------------------------------------------- #
 
 
-def lens_slice(gpt: GPT2LensModel, lens: Lens, prompt: str, top_n: int = 10) -> SliceData:
+def shown_layers(n_layers: int, layer_stride: int = 1) -> list[int]:
+    """Every `layer_stride`-th layer plus the last one (the model output)."""
+    return sorted(set(range(0, n_layers, layer_stride)) | {n_layers - 1})
+
+
+def lens_slice(gpt: GPT2LensModel, lens: Lens, prompt: str, top_n: int = 10, layer_stride: int = 1) -> SliceData:
     """SliceData for build_page; every token that appears in some top-N cell is tracked."""
     token_ids = gpt.encode(prompt)[0].tolist()
-    logits = lens(prompt).transpose(0, 1).contiguous().cpu()  # [seq_len, n_layers, vocab]
+    logits = lens(prompt)
+    layers = shown_layers(logits.shape[0], layer_stride)
+    logits = logits[layers].transpose(0, 1).contiguous().cpu()  # [seq_len, n_layers, vocab]
     seq_len, n_layers, vocab_size = logits.shape
 
     top_ids = logits.topk(top_n, dim=-1).indices
@@ -185,7 +237,7 @@ def lens_slice(gpt: GPT2LensModel, lens: Lens, prompt: str, top_n: int = 10) -> 
     decode = lambda t: gpt.tokenizer.decode([t], clean_up_tokenization_spaces=False)
     return SliceData(
         seq_len=seq_len,
-        layers=list(range(n_layers)),
+        layers=layers,
         context_token_ids=token_ids,
         context_token_strs=[decode(t) for t in token_ids],
         top_ids=top_ids.numpy().astype("int32"),
@@ -197,19 +249,30 @@ def lens_slice(gpt: GPT2LensModel, lens: Lens, prompt: str, top_n: int = 10) -> 
     )
 
 
-def show_lens(gpt: GPT2LensModel, lens: Lens, prompt: str, title: str = "Logit lens", description: str = "") -> None:
+def show_lens(
+    gpt: GPT2LensModel, lens: Lens, prompt: str, title: str = "Logit lens", description: str = "", layer_stride: int = 1
+) -> None:
     """Interactive position x layer view of the lens top-N (``build_page`` from jlens.vis)."""
-    page, _, _ = build_page(lens_slice(gpt, lens, prompt), prompt, title=title, description=description)
+    slice_data = lens_slice(gpt, lens, prompt, layer_stride=layer_stride)
+    page, _, _ = build_page(slice_data, prompt, title=title, description=description)
     display(notebook_iframe(page))
 
 
-def top_tokens_table(gpt: GPT2LensModel, lenses: dict[str, Lens], prompt: str, position: int = -1, top_n: int = 5) -> pd.DataFrame:
-    """Top-N tokens of every lens at one position, a row per layer (last row = model output)."""
+def top_tokens_table(
+    gpt: GPT2LensModel,
+    lenses: dict[str, Lens],
+    prompt: str,
+    position: int = -1,
+    top_n: int = 5,
+    layer_stride: int = 1,
+) -> pd.DataFrame:
+    """Top-N tokens of every lens at one position, a row per shown layer (last row = model output)."""
+    layers = shown_layers(gpt.n_layers, layer_stride)
     columns = {}
     for name, lens in lenses.items():
-        top = lens(prompt)[:, position].topk(top_n, dim=-1).indices.tolist()
+        top = lens(prompt)[layers, position].topk(top_n, dim=-1).indices.tolist()
         columns[name] = [[gpt.tokenizer.decode([t]) for t in row] for row in top]
-    return pd.DataFrame(columns).rename_axis("layer")
+    return pd.DataFrame(columns, index=pd.Index(layers, name="layer"))
 
 
 # --------------------------------------------------------------------------- #
@@ -353,9 +416,11 @@ def evaluate_readout(gpt: GPT2LensModel, lens: Lens, dataset: str, items: list[d
     return pd.DataFrame(word_rows), pd.DataFrame(item_rows)
 
 
-def evaluate_all(gpt: GPT2LensModel, lens: Lens, evals: dict[str, list[dict]]) -> tuple[pd.DataFrame, pd.DataFrame]:
+def evaluate_all(
+    gpt: GPT2LensModel, lens: Lens, evals: dict[str, list[dict]], desc: str = "datasets"
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """:func:`evaluate_readout` over every dataset of `evals`, concatenated."""
-    frames = [evaluate_readout(gpt, lens, dataset, items) for dataset, items in tqdm(evals.items())]
+    frames = [evaluate_readout(gpt, lens, dataset, items) for dataset, items in tqdm(evals.items(), desc=desc)]
     return (
         pd.concat([words for words, _ in frames], ignore_index=True),
         pd.concat([items for _, items in frames], ignore_index=True),
