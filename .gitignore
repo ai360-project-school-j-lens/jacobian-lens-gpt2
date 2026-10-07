@@ -12,3 +12,6 @@ dist/
 *.pt
 slice*.html
 slices/
+
+# experiment caches (notebooks write here by default)
+runs/
