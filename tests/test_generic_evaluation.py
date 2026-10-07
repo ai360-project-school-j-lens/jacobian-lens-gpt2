@@ -125,7 +125,13 @@ def test_generic_notebook_runs_all_analysis_on_native_adapters(native_model):
         "K": 5, "KS": [1, 5, 10, 100], "LAST": model.n_layers - 1,
     }
     analysis = False
-    with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()), patch.object(plt, "show"):
+    with (
+        contextlib.redirect_stdout(io.StringIO()),
+        contextlib.redirect_stderr(io.StringIO()),
+        patch.object(plt, "show"),
+        patch("jlens.metrics.evaluate_distributions") as distributions,
+        patch("jlens.metrics.lens_vector_geometry") as geometry,
+    ):
         for index, cell in enumerate(notebook.cells):
             if cell.cell_type != "code":
                 continue
@@ -139,3 +145,73 @@ def test_generic_notebook_runs_all_analysis_on_native_adapters(native_model):
     assert len(namespace["model_items"]) == 12
     assert len(namespace["head_to_head"]) == len(namespace["inter"]) // 2
     assert not any("GPT2LensModel" in cell.source for cell in notebook.cells)
+    distributions.assert_not_called()
+    geometry.assert_not_called()
+    assert namespace["held_out_metrics"] is None
+    assert namespace["fig55"] is namespace["fig56"] is None
+    assert namespace["reference52"].counts is not None
+
+
+def test_generic_reference_opt_in_and_cached_plots(native_model):
+    _, model = native_model
+    plt.switch_backend("Agg")
+    cells = {c.id: c.source for c in nbformat.read(NOTEBOOK, as_version=4).cells}
+    lens = identity_lens(model)
+    words, _ = evaluate_paired(model, lens, {
+        "multihop": [{"name": "one", "prompt": "abc", "intermediates": ["a"]}],
+    })
+    ns = {"model": model, "fitted_lens": lens, "words": words,
+          "plt": plt, "torch": torch, "display": lambda *args: None}
+
+    def run(cell):
+        exec(compile(cells[cell], cell, "exec"), ns)
+
+    with patch.object(plt, "show"), patch.object(model, "forward", wraps=model.forward) as forward:
+        run("reference-52")
+        run("reference-heldout-config")
+        run("reference-heldout-evaluate")
+        run("reference-heldout-plot")
+        forward.assert_not_called()
+        ns["HELD_OUT_TEXTS"] = ["held out one", "held out two"]
+        with pytest.raises(ValueError, match="HELD_OUT_SOURCE"):
+            run("reference-heldout-evaluate")
+        forward.assert_not_called()
+        ns["HELD_OUT_SOURCE"] = "independent synthetic strings"
+        run("reference-heldout-evaluate")
+        assert forward.call_count == 2
+        assert len(ns["held_out_metrics"].layers) == 2 * model.n_layers
+        assert set(ns["held_out_geometry"].status) == {"ok"}
+        run("reference-heldout-plot")
+        run("reference-heldout-plot")
+        assert forward.call_count == 2
+        assert len(ns["fig55"].axes) == len(ns["fig56"].axes) == 3
+        # An arbitrary LensModel may decode correctly without exposing a linear head.
+        ns["model"] = SimpleNamespace(**{
+            name: getattr(model, name) for name in (
+                "layers", "n_layers", "d_model", "tokenizer", "input_device",
+                "encode", "forward", "unembed",
+            )
+        })
+        run("reference-heldout-evaluate")
+        assert set(ns["held_out_geometry"].status) == {"unsupported"}
+        assert ns["held_out_geometry"].mean_cosine.isna().all()
+        run("reference-heldout-plot")
+        assert ns["axes56"][0].get_ylim() == (0, 1)
+        run("reference-heldout-config")
+        run("reference-heldout-evaluate")
+        run("reference-heldout-plot")
+        assert ns["held_out_metrics"] is None
+        assert ns["fig55"] is ns["fig56"] is None
+    plt.close("all")
+
+
+@pytest.mark.parametrize("dtype", [torch.float32, torch.bfloat16, torch.float16])
+def test_generic_identity_uses_configured_dtype_without_casting(native_model, dtype):
+    hf, model = native_model
+    hf.to(dtype=dtype)
+    cells = {c.id: c.source for c in nbformat.read(NOTEBOOK, as_version=4).cells}
+    ns = {"model": model, "hf_model": hf,
+          "evals": {"order-ops": [{"name": "one", "prompt": "abc", "intermediates": ["a"]}]}}
+    for cell in ("generic-004", "generic-008", "generic-010", "generic-014"):
+        exec(compile(cells[cell], cell, "exec"), ns)
+    assert {p.dtype for p in hf.parameters()} == {dtype}
