@@ -25,6 +25,12 @@ Unless a section says otherwise:
 
 90 two-hop factual prompts. `items[*].prompt` ends just before the answer; `intermediate` is the bridge entity, `swap_to` the replacement. Baseline: greedy next-token == `answer`. Swap: replace the `intermediate` representation (linear-probe direction) with `swap_to` across the band at every prompt token position; score next-token at the final position == `swap_answer`. `category` groups items by relation type for the per-category breakdown.
 
+## latent-bridge
+
+[`latent-bridge.json`](latent-bridge.json)
+
+An easier two-hop set for small models, in the `probe-swap` item format. 100 well-known landmarks in 20 countries fill one `template` ("The Eiffel Tower is in a country where the main language is"); the country (`intermediate`) never appears in the prompt and `answer` is its language from `languages` (one canonical word per country). Each landmark is paired with 4 `swap_to` countries with a different language, drawn with `random.Random(0)`: 400 items. All 20 country names are single GPT-2 tokens. Scoring as in `probe-swap`. `category` is the landmark's country; `landmark` is the unformatted landmark name.
+
 ## verbal-introspection
 
 [`verbal-introspection.json`](verbal-introspection.json)
