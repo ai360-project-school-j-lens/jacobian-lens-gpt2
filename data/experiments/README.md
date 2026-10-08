@@ -31,6 +31,12 @@ Unless a section says otherwise:
 
 An easier two-hop set for small models, in the `probe-swap` item format. 100 well-known landmarks in 20 countries fill one `template` ("The Eiffel Tower is in a country where the main language is"); the country (`intermediate`) never appears in the prompt and `answer` is its language from `languages` (one canonical word per country). Each landmark is paired with 4 `swap_to` countries with a different language, drawn with `random.Random(0)`: 400 items. All 20 country names are single GPT-2 tokens. Scoring as in `probe-swap`. `category` is the landmark's country; `landmark` is the unformatted landmark name.
 
+## concept-probe-templates
+
+[`concept-probe-templates.json`](concept-probe-templates.json)
+
+20 neutral `templates` with an `{x}` slot ("Let me tell you about {x}.") for building concept probe directions without touching test prompts. Each template is filled with every concept of a swap set; the residual stream is read at the concept token (single-token concepts, `{x}` always preceded by a space). The difference-of-means direction for concept c at a layer is its mean over templates minus the mean over all concepts. `notebooks/jacobian_lens/concept_swap.ipynb` uses these directions as the `probe` swap mode for `probe-swap`, `latent-bridge`, and `flexible-generalization`.
+
 ## verbal-introspection
 
 [`verbal-introspection.json`](verbal-introspection.json)

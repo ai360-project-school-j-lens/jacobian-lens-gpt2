@@ -1,0 +1,24 @@
+{
+  "templates": [
+    "Let me tell you about {x}.",
+    "Today we will talk about {x}.",
+    "The next topic is {x}.",
+    "Here are some facts about {x}:",
+    "I have been thinking about {x} a lot.",
+    "This article is about {x}.",
+    "Keyword: {x}.",
+    "My favorite thing to read about is {x}.",
+    "Question: what do you know about {x}?",
+    "She wrote a long essay on {x}.",
+    "Everyone was talking about {x}.",
+    "The documentary was about {x}.",
+    "Search results for {x}:",
+    "Tag: {x}",
+    "We learned about {x} in school.",
+    "He asked me about {x}.",
+    "A short note on {x}.",
+    "The quiz question was about {x}.",
+    "Wikipedia page: {x}",
+    "Notes on {x}:"
+  ]
+}
