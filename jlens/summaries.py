@@ -51,16 +51,18 @@ def _dataset_names(items: pd.DataFrame, datasets) -> list:
     return list(dict.fromkeys(items["dataset"] if datasets is None else datasets))
 
 
-def _model_items(items: pd.DataFrame) -> pd.DataFrame:
+def _model_items(
+    items: pd.DataFrame, *, correctness_column: str = "model_correct",
+) -> pd.DataFrame:
     """Deduplicate only model-level metadata, never lens-specific readouts."""
-    _require(items, [*_KEYS, "target", "model_correct"])
+    _require(items, [*_KEYS, "target", correctness_column])
     if items[_KEYS].isna().any().any():
         raise ValueError("dataset/item keys cannot be missing")
     if "lens" in items and items.duplicated([*_KEYS, "lens"]).any():
         raise ValueError("Duplicate dataset/item/lens rows")
     shared = [
         c for c in (
-            "target", "model_correct", "target_ids", "model_top1_id", "model_top1",
+            "target", correctness_column, "target_ids", "model_top1_id", "model_top1",
             "prompt", "readout_token", "readout_position", "n_tokens",
             "n_prompt_tokens",
         ) if c in items
@@ -72,13 +74,14 @@ def _model_items(items: pd.DataFrame) -> pd.DataFrame:
             if not all(_equal(first[column], v) for v in group[column]):
                 raise ValueError(f"Inconsistent lens copies for {key}: {column}")
         annotated = pd.notna(first["target"])
-        correct = first["model_correct"]
+        correct = first[correctness_column]
         if pd.notna(correct) and not isinstance(correct, (bool, np.bool_)):
-            raise ValueError("model_correct must be boolean or missing")
+            raise ValueError(f"{correctness_column} must be boolean or missing")
         supported = pd.notna(correct)
         if supported and not annotated:
             raise ValueError(f"Unannotated item has model_correct: {key}")
-        if "target_ids" in items and bool(len(first["target_ids"])) != supported:
+        if (correctness_column == "model_correct" and "target_ids" in items
+                and bool(len(first["target_ids"])) != supported):
             raise ValueError(f"target_ids/model_correct support mismatch: {key}")
         rows.append({**dict(zip(_KEYS, key, strict=True)), "target": first["target"],
                      "annotated": bool(annotated), "supported": bool(supported),
@@ -153,11 +156,15 @@ def retrieval_summary(
     k: int = 10, layer_scope: str = "inner",
     subsets: Sequence[str] = ("all", "correct"),
     datasets: Sequence[str] | None = None,
+    correctness_column: str = "model_correct",
 ) -> pd.DataFrame:
     """Item-first supported-word rank-hit means, with explicit coverage counts.
 
     All includes *every* item (no correctness/support filter on its answer).
-    Correct includes only model_correct == True. For each eligible item, average
+    Correct includes only correctness_column == True (default: model_correct).
+    Use answer_correct for generated-answer selection, independent of lexical
+    target support; token ranks and their coverage are unchanged.
+    For each eligible item, average
     supported-word hits, then average items equally. Unsupported words and items
     without eligible words are excluded, not scored zero. ``inner`` drops the
     last rank entry; ``all`` retains it; ``final`` uses only it.
@@ -169,7 +176,7 @@ def retrieval_summary(
         raise ValueError("kind must be intermediate, target, or control")
     if isinstance(subsets, str) or not set(subsets) <= {"all", "correct"}:
         raise ValueError("subsets must contain only all and/or correct")
-    model_items = _model_items(items)
+    model_items = _model_items(items, correctness_column=correctness_column)
     words = _word_table(all_words, model_items)
     words = words[words["kind"].eq(kind)].copy()
     hits = []
@@ -215,7 +222,9 @@ def retrieval_summary(
                     item_coverage=_ratio(n_items_used, len(selected_items)),
                     word_coverage=_ratio(len(used), len(group)),
                 ))
-    return pd.DataFrame(rows, columns=_RETRIEVAL_COLUMNS)
+    result = pd.DataFrame(rows, columns=_RETRIEVAL_COLUMNS)
+    result.attrs["correctness_column"] = correctness_column
+    return result
 
 
 def target_final_counts(
@@ -300,7 +309,12 @@ def plot_retrieval_summary(summary: pd.DataFrame) -> tuple[Figure, np.ndarray]:
                     ax.text(position, 0.02, "N/A", ha="center", fontsize=7,
                             rotation=90)
         ax.set_xticks(x, datasets, rotation=25, ha="right")
-        ax.set(title="All items" if subset == "all" else "Model-correct items only",
+        correct_label = (
+            "Generated-answer-correct items only"
+            if summary.attrs.get("correctness_column") == "answer_correct"
+            else "Model-correct items only"
+        )
+        ax.set(title="All items" if subset == "all" else correct_label,
                ylim=(0, 1), ylabel="Item-first supported-word hit rate")
         ax.grid(axis="y", alpha=0.2)
     axes[0].legend(fontsize=8)
