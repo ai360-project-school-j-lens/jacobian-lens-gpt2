@@ -87,6 +87,22 @@ Reading a slice page:
   tokens get rank-tracking charts and a rank heatmap.
 - The bottom row (`L = n_layers − 1`) is the model's actual output.
 
+## Dataset comparison notebooks
+
+[model_agnostic_lens_dataset.ipynb](notebooks/jacobian_lens/model_agnostic_lens_dataset.ipynb)
+keeps an explicit handwritten logit lens and compares it with the J-lens
+using one set of recorded activations per prompt. It uses `LensModel` and
+`from_hf`, defaults to Qwen2.5-0.5B, and retains the full dataset metrics.
+
+The [GPT-2 comparison](notebooks/jacobian_lens/jacobian_logit_lens_dataset.ipynb)
+and the model-agnostic notebook support dimension-batch benchmarks and
+`FIT_MODE="sharded"`. Sharded fitting loads one model per worker, fits
+disjoint prompt shards with separate checkpoints, and calls
+`JacobianLens.merge` with prompt-count weighting. Repeat a device in
+`WORKER_DEVICES` to try multiple processes on one GPU, or select distinct
+GPUs. Account for the notebook's resident model as well as each worker;
+measure throughput to compare this with a larger single-worker batch.
+
 ## License and data
 
 Code is released under the Apache License 2.0 — see [LICENSE](LICENSE).

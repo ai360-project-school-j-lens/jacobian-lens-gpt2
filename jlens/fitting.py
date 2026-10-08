@@ -150,6 +150,10 @@ def jacobian_for_prompt(
         for layer in source_layers
     }
     n_passes = math.ceil(d_model / dim_batch)
+    logger.info(
+        "  jacobian forward: seq_len=%d dim_batch=%d backward_passes=%d",
+        seq_len, dim_batch, n_passes,
+    )
 
     with (
         ActivationRecorder(
@@ -174,6 +178,7 @@ def jacobian_for_prompt(
         batch_indices = torch.arange(dim_batch, device=target_activation.device)
         cotangent = torch.zeros_like(target_activation)
 
+        last_progress = time.perf_counter()
         for pass_idx, dim_start in enumerate(range(0, d_model, dim_batch)):
             n_dims_this_pass = min(dim_batch, d_model - dim_start)
             # One-hot cotangent at dim (dim_start + b) for batch element b,
@@ -201,6 +206,10 @@ def jacobian_for_prompt(
                     rows.cpu()
                 )
             del grads
+            now = time.perf_counter()
+            if pass_idx == 0 or pass_idx == n_passes - 1 or now - last_progress >= 2:
+                logger.info("  jacobian backward: %d/%d", pass_idx + 1, n_passes)
+                last_progress = now
             if pass_idx % 100 == 0 or pass_idx == n_passes - 1:
                 logger.debug(
                     "    pass %d/%d (dims %d-%d)",

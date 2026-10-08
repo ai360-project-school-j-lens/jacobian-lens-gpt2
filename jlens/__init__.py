@@ -9,6 +9,7 @@ from jlens.hf import HFLensModel, Layout, from_hf
 from jlens.hooks import ActivationRecorder
 from jlens.lens import JacobianLens
 from jlens.protocol import LensModel
+from jlens.sharded_fitting import benchmark_dim_batches, fit_sharded
 
 __all__ = [
     "ActivationRecorder",
@@ -16,8 +17,10 @@ __all__ = [
     "JacobianLens",
     "Layout",
     "LensModel",
+    "benchmark_dim_batches",
     "configure_logging",
     "fit",
+    "fit_sharded",
     "from_hf",
     "jacobian_for_prompt",
 ]
