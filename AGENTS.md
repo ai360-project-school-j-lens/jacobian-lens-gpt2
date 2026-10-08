@@ -25,6 +25,8 @@ Use four-space indentation, `snake_case` functions/modules, and `PascalCase` cla
 
 Put reusable model-independent logic in `jlens/`. Prefer `LensModel` and `from_hf` over private architecture attributes.
 
+Batch model passes whenever possible; never loop over prompts or settings one forward pass at a time. Group prompts by length, pad, and run them as a batch: with right padding, read each row at its last real token. Keep per-row state (bases, clean activations, answer masks) as batched tensors, move constants such as Jacobians to the device once, and avoid per-item GPU→CPU syncs (`.item()`, `int(tensor)`) inside the inner loop.
+
 ## Testing Guidelines
 
 Pytest runs function tests and unittest-based cases. Name files `test_*.py` and tests `test_*`. No coverage threshold is configured. Add regression tests for changed behavior using tiny CPU models rather than downloaded weights. Verify shared activations, final-model readout, tokenizer special-token handling, and shard merge/resume behavior when relevant.
