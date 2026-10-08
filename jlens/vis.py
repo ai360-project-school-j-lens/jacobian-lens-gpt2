@@ -27,6 +27,7 @@ import torch
 from jlens.hooks import ActivationRecorder
 from jlens.lens import JacobianLens
 from jlens.protocol import LensModel
+from jlens.readout import readout, selected_token_ranks, top_token_ids
 
 PAGE_TEMPLATE = (files("jlens") / "data" / "slice_vis.html").read_text(encoding="utf-8")
 
@@ -98,8 +99,7 @@ def notebook_iframe(page: str, *, height: int = 620):
 def _ranks_of(
     logits: torch.Tensor, target_ids: torch.Tensor, *, chunk_size: int = 256
 ) -> torch.Tensor:
-    """Full-vocab ranks of ``target_ids`` at every position, chunked over the
-    sequence so peak memory is one ``[chunk_size, vocab]`` sort buffer.
+    """Full-vocab ranks with bounded position/target/vocabulary comparisons.
 
     Args:
         logits: ``[seq_len, vocab]``.
@@ -109,19 +109,15 @@ def _ranks_of(
     Returns:
         ``[seq_len, n_targets]`` int64 ranks (0 = top).
     """
-    seq_len, vocab = logits.shape
+    if chunk_size < 1:
+        raise ValueError("chunk_size must be positive")
     out = torch.empty(
-        seq_len, target_ids.shape[-1], dtype=torch.long, device=logits.device
+        logits.shape[0], target_ids.shape[-1], dtype=torch.long, device=logits.device
     )
-    arange = torch.arange(vocab, device=logits.device)
-    for start in range(0, seq_len, chunk_size):
+    for start in range(0, logits.shape[0], chunk_size):
         sl = slice(start, start + chunk_size)
-        sorted_idx = logits[sl].argsort(dim=-1, descending=True)
-        full_rank = torch.empty_like(sorted_idx)
-        full_rank.scatter_(1, sorted_idx, arange.expand_as(sorted_idx))
         idx = target_ids if target_ids.ndim == 1 else target_ids[sl]
-        out[sl] = full_rank.gather(1, idx.expand(full_rank.shape[0], -1))
-        del sorted_idx, full_rank
+        out[sl] = selected_token_ranks(logits[sl], idx) - 1
     return out
 
 
@@ -167,8 +163,9 @@ class SliceData:
     """Everything needed to render one slice page.
 
     All arrays are indexed ``[seq_len, n_layers, ...]``. ``layers`` always
-    includes the model's final layer (rendered with ``J = I``, i.e. the
-    model's actual output) so divergences from earlier lens rows are visible.
+    includes the model's final layer (rendered with ``J = I``). Displayed
+    tokens/ranks use pre-softcap lexical scores when available, not the rounded
+    distribution's argmax. Ties are ordered by ascending token ID.
     ``context_token_ids``/``strs`` cover the full prompt; the slice arrays
     cover positions ``ctx_offset`` onward (``ctx_offset > 0`` only when
     ``last_n_tokens`` windowed the slice).
@@ -254,10 +251,10 @@ def compute_slice(
 
     def lens_logits(layer: int) -> torch.Tensor:
         residual = activations[layer][0, start:].float()
-        if layer in lens.jacobians:
+        if layer != final_layer and layer in lens.jacobians:
             residual = lens.transport(residual, layer)
-        # else: layer == final_layer, J = I -> this row is the model's output.
-        return model.unembed(residual).float().detach()  # [seq_len, vocab_size]
+        # Lexical ordering, not the rounded model distribution's argmax.
+        return readout(model, residual).ranking_scores.detach()
 
     n_layers = len(layers)
     top_ids = np.zeros((seq_len, n_layers, top_n), dtype=np.int32)
@@ -272,7 +269,7 @@ def compute_slice(
         vocab_size = int(logits.shape[-1])
 
         if not mask_display:
-            top_idx = logits.topk(top_n, dim=-1).indices
+            top_idx = top_token_ids(logits, top_n)
             top_ids[:, layer_idx] = top_idx.cpu().numpy()
             top_ranks[:, layer_idx] = np.arange(top_n, dtype=np.int32)
         else:
@@ -280,10 +277,8 @@ def compute_slice(
                 display_mask = _meaningful_token_mask(
                     tokenizer, vocab_size, logits.device
                 )
-            top_idx = (
-                logits.masked_fill(~display_mask, float("-inf"))
-                .topk(top_n, dim=-1)
-                .indices
+            top_idx = top_token_ids(
+                logits.masked_fill(~display_mask, float("-inf")), top_n,
             )
             top_ids[:, layer_idx] = top_idx.cpu().numpy()
             top_ranks[:, layer_idx] = _ranks_of(logits, top_idx).cpu().numpy()
@@ -301,7 +296,7 @@ def compute_slice(
     tracked = sorted(set(by_score[:max_tracked]) | pinned_token_ids)
 
     # Pass 2: re-unembed per layer and compute tracked-token ranks chunked
-    # (no full-seq argsort; peak memory is one layer's logits + a chunk sort).
+    # (no vocabulary permutations; only bounded comparison workspaces).
     rank_tensor = np.full((seq_len, n_layers, len(tracked)), -1, dtype=np.int32)
     if tracked:
         tracked_tensor = torch.tensor(tracked, dtype=torch.long)

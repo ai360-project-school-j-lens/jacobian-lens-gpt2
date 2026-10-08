@@ -19,6 +19,42 @@ Unless a section says otherwise:
 - Prompts that span multiple turns are given as
   `[{"role": "user"|"assistant", "content": ...}]`.
 
+## Notebook answer diagnostics
+
+The dataset protocols below score intermediates, not targets. The dataset notebooks
+add **next-token answer diagnostics**: target ranks and model top-1 correctness use
+exactly the same accepted complete single-token spellings (case/leading-space
+variants, plus digit/word and operation synonyms for `order-ops`). A target with no
+accepted whole-token spelling has null ranks and null correctness. A whitespace
+or first-fragment prediction is not a completed multi-token answer.
+
+Unsupported annotated targets are reported separately from unannotated items and
+excluded from accuracy/rank denominators, not counted as wrong. Accuracy is
+correct/supported; no supported answers means N/A. Legacy `pass_at_k` reports
+`n_words`, `n_words_scored`, `n_items`, and `n_items_scored`; it excludes null ranks,
+averages retained words within each item, then averages retained items equally.
+Entirely unsupported groups retain NaN scores. Layer curves omit datasets with
+no ranked words; consult the coverage tables rather than interpreting absence as
+zero. Legacy intermediate/control probes still allow a first-token fallback;
+strict decoded-spelling evaluation excludes those fallback probes too. These
+policies do not measure generated multi-token answer accuracy.
+
+`ReadoutCache` uses the same complete-target acceptance as direct evaluation.
+`WordRanker` returns NaN for empty accepted-ID sets; `words_frame` restores null
+rank rows and `item_scores` excludes them from denominators. Saved readout caches
+now require scoring version 2; unversioned/older caches must be rebuilt, along
+with their derived ranks/results. The convergence and residual-delta notebooks
+use versioned cache filenames so obsolete answer-prefix results are not reused.
+
+Ranks use descending lexical score, then ascending token ID on exact ties. With
+HF dual readouts these are pre-softcap scores; correctness and predictions use
+the actual model distribution. Finite-precision softcap saturation can therefore
+make lexical rank 1 differ from model argmax, and the final lexical rank of the
+model's predicted token need not be 1. Tensor-only callbacks instead rank the
+distribution logits with the same deterministic tie rule. Recompute old
+optimistic-tie/prefix-target result caches; see
+[readout ranking and cache migration](../../docs/readout_ranking.md).
+
 ## lens-eval-multihop
 
 [`lens-eval-multihop.json`](lens-eval-multihop.json)

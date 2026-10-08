@@ -36,6 +36,10 @@ from jlens.evaluation import (
 
 REPO = Path(__file__).resolve().parents[1]
 NOTEBOOK = REPO / "notebooks/jacobian_lens/model_agnostic_lens_dataset.ipynb"
+NOTEBOOKS = [
+    NOTEBOOK,
+    NOTEBOOK.with_name("failed_gemma_model_agnostic_lens_dataset.ipynb"),
+]
 
 
 class NativeTokenizer:
@@ -113,18 +117,33 @@ def test_paired_metrics_include_first_position_without_bos(native_model):
     assert words.iloc[0].in_prompt
 
 
-def test_generic_notebook_runs_all_analysis_on_native_adapters(native_model):
+@pytest.mark.parametrize("notebook_path", NOTEBOOKS, ids=lambda p: p.stem)
+@pytest.mark.parametrize("coverage", ["original", "mixed", "unsupported"])
+def test_generic_notebook_runs_all_analysis_on_native_adapters(
+    native_model, notebook_path, coverage,
+):
     hf, model = native_model
     plt.switch_backend("Agg")
-    notebook = nbformat.read(NOTEBOOK, as_version=4)
+    notebook = nbformat.read(notebook_path, as_version=4)
     nbformat.validate(notebook)
+    evals = {dataset: load_eval(str(REPO), dataset)[:2] for dataset in DATASETS}
+    if coverage != "original":
+        for samples in evals.values():
+            for index, sample in enumerate(samples):
+                if sample.get("target") is not None:
+                    sample["target"] = (
+                        "a" if coverage == "mixed" and index == 0
+                        else "unsupported multi-token answer"
+                    )
     namespace = {
         "model": model, "hf_model": hf, "fitted_lens": identity_lens(model),
-        "evals": {dataset: load_eval(str(REPO), dataset)[:2] for dataset in DATASETS},
+        "evals": evals,
         "LENS_NAMES": ("logit lens", "J-lens"), "LAYER_STRIDE": 1,
         "K": 5, "KS": [1, 5, 10, 100], "LAST": model.n_layers - 1,
+        "HUB_LENS": None, "loaded_hub_request": None,
     }
     analysis = False
+    executed_cells = set()
     with (
         contextlib.redirect_stdout(io.StringIO()),
         contextlib.redirect_stderr(io.StringIO()),
@@ -136,12 +155,15 @@ def test_generic_notebook_runs_all_analysis_on_native_adapters(native_model):
             if cell.cell_type != "code":
                 continue
             source = cell.source
-            if source.startswith("sanity_evals ="):
+            # Imports/comments may precede the identity check. Select the stable
+            # cell ID, not source formatting, so all real analysis cells execute.
+            if cell.id == "generic-014":
                 analysis = True
-            if (source.startswith("import matplotlib") or source.startswith("@torch.no_grad()")
-                    or source.startswith("check_prompt =") or analysis):
-                exec(compile(source, f"{NOTEBOOK.name}:cell {index}", "exec"), namespace)
+            if cell.id in ("generic-004", "generic-008", "generic-010") or analysis:
+                exec(compile(source, f"{notebook_path.name}:cell {index}", "exec"), namespace)
+                executed_cells.add(cell.id)
                 plt.close("all")
+    assert {"generic-014", "generic-016", "generic-055"} <= executed_cells
     assert len(namespace["model_items"]) == 12
     assert len(namespace["head_to_head"]) == len(namespace["inter"]) // 2
     assert not any("GPT2LensModel" in cell.source for cell in notebook.cells)
@@ -150,12 +172,62 @@ def test_generic_notebook_runs_all_analysis_on_native_adapters(native_model):
     assert namespace["held_out_metrics"] is None
     assert namespace["fig55"] is namespace["fig56"] is None
     assert namespace["reference52"].counts is not None
+    assert namespace["words"].ranks.notna().all()
+    assert not namespace["unsupported_targets"].empty
+    answer_coverage = namespace["answer_coverage"]
+    assert (answer_coverage.scored + answer_coverage.unsupported == answer_coverage.total).all()
+    if coverage == "unsupported":
+        assert (answer_coverage.coverage == 0).all()
+        assert namespace["accuracy"].empty
+        assert namespace["target"].empty
+        assert any("accuracy n/a" in line for line in namespace["lines"])
+    elif coverage == "mixed":
+        assert (answer_coverage.coverage == 0.5).all()
+    # The top-1 display table must not shadow the dual-readout callback's helper.
+    # Rerun must recompute, not reuse the previous metrics or held-out results.
+    cells = {cell.id: cell.source for cell in notebook.cells}
+    old_words = namespace["words"]
+    namespace["held_out_metrics"] = object()
+    with (
+        contextlib.redirect_stdout(io.StringIO()),
+        contextlib.redirect_stderr(io.StringIO()),
+        patch.object(model, "forward", wraps=model.forward) as forward,
+    ):
+        exec(compile(cells["generic-016"], notebook_path.name, "exec"), namespace)
+    assert forward.call_count == sum(map(len, evals.values()))
+    assert namespace["words"] is not old_words
+    assert namespace["held_out_metrics"] is None
+    assert namespace["accuracy"] is namespace["reference52"] is None
 
 
-def test_generic_reference_opt_in_and_cached_plots(native_model):
+@pytest.mark.parametrize("notebook_path", NOTEBOOKS, ids=lambda p: p.stem)
+@pytest.mark.parametrize("failure", ["configuration", "inference"])
+def test_notebook_failed_evaluation_invalidates_previous_tables(notebook_path, failure):
+    cells = {c.id: c.source for c in nbformat.read(notebook_path, as_version=4).cells}
+    keys = (
+        "words", "items", "all_words", "scores", "inter", "target", "accuracy",
+        "answer_coverage", "word_coverage", "paired_summary", "reference52",
+        "held_out_metrics", "held_out_geometry", "fig55", "fig56",
+    )
+    ns = dict.fromkeys(keys, "old result")
+    ns.update(fitted_lens=None if failure == "configuration" else object(),
+              HUB_LENS=None, loaded_hub_request=None, model=object(), evals={},
+              handwritten_logit_lens=object())
+
+    def fail(*args, **kwargs):
+        raise RuntimeError("inference failed")
+
+    ns["evaluate_paired"] = fail
+    with pytest.raises(RuntimeError, match="configuration|inference"):
+        exec(compile(cells["generic-016"], notebook_path.name, "exec"), ns)
+    assert all(ns[key] is None for key in keys)
+
+
+@pytest.mark.parametrize("notebook_path", NOTEBOOKS, ids=lambda p: p.stem)
+def test_generic_reference_opt_in_and_cached_plots(native_model, notebook_path):
     _, model = native_model
     plt.switch_backend("Agg")
-    cells = {c.id: c.source for c in nbformat.read(NOTEBOOK, as_version=4).cells}
+    cells = {c.id: c.source for c in nbformat.read(notebook_path, as_version=4).cells}
     lens = identity_lens(model)
     words, _ = evaluate_paired(model, lens, {
         "multihop": [{"name": "one", "prompt": "abc", "intermediates": ["a"]}],

@@ -1,8 +1,10 @@
 """Opt-in whole-token scoring and explicit prompt encoding for new notebooks.
 
-The legacy evaluator's defaults are deliberately unchanged. Gloss translations
-are presentation only: accepted spellings come from exact tokenizer decoding,
-not vocabulary marker strings, re-encoding a displayed token, or translations.
+Unlike the legacy intermediate/control probes, this never uses prefix
+fallbacks. Legacy targets also require complete single-token spellings, but
+only find IDs returned by encoding; this indexes all decoded vocabulary IDs.
+Gloss translations are presentation only: accepted spellings come from exact
+tokenizer decoding, not vocabulary marker strings or translations.
 """
 
 from __future__ import annotations

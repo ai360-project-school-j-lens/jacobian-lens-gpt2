@@ -22,6 +22,8 @@ from typing import Any
 import torch
 from torch import nn
 
+from jlens.readout import LensReadout
+
 
 def _resolve_attr_path(obj: Any, dotted_path: str) -> Any:
     return functools.reduce(getattr, dotted_path.split("."), obj)
@@ -194,14 +196,24 @@ class HFLensModel:
         )
 
     def unembed(self, residual: torch.Tensor) -> torch.Tensor:
+        """Actual model logits, including native-precision logit transforms."""
+        return self.unembed_readout(residual).logits
+
+    def unembed_readout(self, residual: torch.Tensor) -> LensReadout:
+        """Decode once, retaining pre-softcap scores for lexical ranking.
+
+        Softcap arithmetic is deliberately unchanged: promoting it to fp32
+        would change the model distribution and still saturate at large inputs.
+        """
         target_device = self._lm_head.weight.device
         target_dtype = self._lm_head.weight.dtype
         logits = self._lm_head(
             self._final_norm(residual.to(target_dtype).to(target_device))
         )
+        ranking_scores = logits
         if self._logit_softcap is not None:
             logits = self._logit_softcap * torch.tanh(logits / self._logit_softcap)
-        return logits
+        return LensReadout(logits, ranking_scores)
 
 
 def from_hf(

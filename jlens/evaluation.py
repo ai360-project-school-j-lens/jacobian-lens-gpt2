@@ -26,9 +26,17 @@ from jlens.fitting import fit
 from jlens.hooks import ActivationRecorder
 from jlens.lens import JacobianLens
 from jlens.protocol import LensModel
+from jlens.readout import (
+    LensReadout,
+    as_readout,
+    readout,
+    selected_token_ranks,
+    top_token_ids,
+    warn_legacy_readout,
+)
 from jlens.vis import SliceData, build_page, notebook_iframe
 
-Lens = Callable[[str], torch.Tensor]
+Lens = Callable[[str], torch.Tensor | LensReadout]
 
 DATASETS = ["multihop", "multilingual", "order-ops", "poetry", "association", "typo"]
 
@@ -177,32 +185,66 @@ def fit_with_progress(model: LensModel, prompts: Sequence[str], **fit_kwargs) ->
 # --------------------------------------------------------------------------- #
 
 
-ActivationReadout = Callable[[LensModel, dict[int, torch.Tensor]], torch.Tensor]
+ActivationReadout = Callable[
+    [LensModel, dict[int, torch.Tensor]], torch.Tensor | LensReadout
+]
+
+
+def _stack_readouts(values: list[LensReadout]) -> LensReadout:
+    # Copy/cast directly into the output, without a full fp32 list plus stack.
+    logits = torch.empty(
+        (len(values), *values[0].logits.shape),
+        device=values[0].logits.device, dtype=torch.float32,
+    )
+    for layer, value in enumerate(values):
+        logits[layer].copy_(value.logits)
+    scores = (
+        logits if all(
+            v.logits is v.ranking_scores and v.logits.dtype != torch.float64
+            for v in values
+        ) else torch.stack([v.ranking_scores for v in values])
+    )
+    return LensReadout(logits, scores)
 
 
 @torch.no_grad()
 def logit_lens_from_activations(
-    model: LensModel, activations: dict[int, torch.Tensor]
-) -> torch.Tensor:
-    """Handwritten baseline: unembed each pre-final-norm block output."""
-    logits = [
-        model.unembed(activations[layer][0].float()).float()
+    model: LensModel, activations: dict[int, torch.Tensor], *,
+    return_readout: bool = False,
+) -> torch.Tensor | LensReadout:
+    """Baseline readout; opt into both lexical scores and distribution logits.
+
+    The default tensor remains the actual model-distribution logits for public
+    compatibility. Pass ``return_readout=True`` for lexical evaluation/display.
+    """
+    if not return_readout:
+        return torch.stack([
+            model.unembed(activations[layer][0].float()).float()
+            for layer in range(model.n_layers)
+        ])
+    return _stack_readouts([
+        readout(model, activations[layer][0].float())
         for layer in range(model.n_layers)
-    ]
-    return torch.stack(logits)
+    ])
 
 
 @torch.no_grad()
-def logit_lens(model: LensModel, text: str) -> torch.Tensor:
-    """Record one forward pass and read it out without Jacobian transport."""
+def logit_lens(
+    model: LensModel, text: str, *, return_readout: bool = False,
+) -> torch.Tensor | LensReadout:
+    """Read block outputs; use ``return_readout=True`` for lexical evaluation."""
     with ActivationRecorder(model.layers, at=range(model.n_layers)) as recorder:
         model.forward(model.encode(text))
-    return logit_lens_from_activations(model, recorder.activations)
+    return logit_lens_from_activations(
+        model, recorder.activations, return_readout=return_readout,
+    )
 
 
 @torch.no_grad()
-def jacobian_lens(model: LensModel, lens: JacobianLens, text: str) -> torch.Tensor:
-    """Transport block outputs, then use the model's final norm and unembedding."""
+def jacobian_lens(
+    model: LensModel, lens: JacobianLens, text: str, *, return_readout: bool = False,
+) -> torch.Tensor | LensReadout:
+    """Transport then decode; opt into dual spaces with ``return_readout=True``."""
     # активации снимаются теми же хуками на model.layers, что и при fit,
     # поэтому J_l применяется ровно к тому, на чём он обучен
     with ActivationRecorder(model.layers, at=range(model.n_layers)) as recorder:
@@ -211,10 +253,12 @@ def jacobian_lens(model: LensModel, lens: JacobianLens, text: str) -> torch.Tens
     for layer in range(model.n_layers):
         residual = recorder.activations[layer][0].float()
         # у последнего блока J = I — это логиты модели
-        if layer in lens.jacobians:
+        if layer != model.n_layers - 1 and layer in lens.jacobians:
             residual = lens.transport(residual, layer)
-        logits.append(model.unembed(residual))
-    return torch.stack(logits).float()
+        logits.append(
+            readout(model, residual) if return_readout else model.unembed(residual).float()
+        )
+    return _stack_readouts(logits) if return_readout else torch.stack(logits)
 
 
 def identity_lens(model: LensModel) -> JacobianLens:
@@ -238,16 +282,23 @@ def shown_layers(n_layers: int, layer_stride: int = 1) -> list[int]:
 def lens_slice(model: LensModel, lens: Lens, prompt: str, top_n: int = 10, layer_stride: int = 1) -> SliceData:
     """SliceData for build_page; every token that appears in some top-N cell is tracked."""
     token_ids = model.encode(prompt)[0].tolist()
-    logits = lens(prompt)
+    result = lens(prompt)
+    if not isinstance(result, LensReadout):
+        warn_legacy_readout(model)
+    logits = as_readout(result).ranking_scores
+    del result  # Displays do not need to retain distribution logits.
     layers = shown_layers(logits.shape[0], layer_stride)
-    logits = logits[layers].transpose(0, 1).contiguous().cpu()  # [seq_len, n_layers, vocab]
-    seq_len, n_layers, vocab_size = logits.shape
+    seq_len, n_layers, vocab_size = logits.shape[1], len(layers), logits.shape[-1]
 
-    top_ids = logits.topk(top_n, dim=-1).indices
+    if not 0 <= top_n <= vocab_size:
+        raise ValueError("top_n must be between zero and vocabulary size")
+    # Work on layer views; never copy or sort the full layer/position vocabulary.
+    top_ids = torch.stack([top_token_ids(logits[layer], top_n).cpu() for layer in layers], dim=1)
     tracked = sorted(set(top_ids.flatten().tolist()))
-    # ранг токена = число токенов словаря со строго большим логитом
-    sorted_logits = logits.sort(dim=-1).values
-    rank_tensor = vocab_size - torch.searchsorted(sorted_logits, logits[..., tracked], right=True)
+    tracked_ids = torch.tensor(tracked, dtype=torch.long, device=logits.device)
+    rank_tensor = torch.stack([
+        (selected_token_ranks(logits[layer], tracked_ids) - 1).cpu() for layer in layers
+    ], dim=1)
 
     def decode(token):
         return model.tokenizer.decode([token], clean_up_tokenization_spaces=False)
@@ -286,8 +337,14 @@ def top_tokens_table(
     layers = shown_layers(model.n_layers, layer_stride)
     columns = {}
     for name, lens in lenses.items():
-        top = lens(prompt)[layers, position].topk(top_n, dim=-1).indices.tolist()
+        result = lens(prompt)
+        if not isinstance(result, LensReadout):
+            warn_legacy_readout(model)
+        scores = as_readout(result).ranking_scores
+        del result
+        top = [top_token_ids(scores[layer, position], top_n).tolist() for layer in layers]
         columns[name] = [[model.tokenizer.decode([t]) for t in row] for row in top]
+        del scores
     return pd.DataFrame(columns, index=pd.Index(layers, name="layer"))
 
 
@@ -321,13 +378,31 @@ def synonyms(word: str) -> list[str]:
 
 
 def single_token_ids(tokenizer, word: str, expand: bool = False) -> set[int]:
-    """Single-token spellings of `word`: with/without leading space, as-is/lower/capitalized."""
+    """Complete single-token spellings, with optional space and case variants.
+
+    Encoding must round-trip exactly; unknown/special tokens and whitespace
+    alone are not lexical spellings. Unlike ``DecodedSpellings``, this only
+    finds IDs returned by encoding, not every equivalent decoded vocabulary ID.
+    """
+    special_ids = set(getattr(tokenizer, "all_special_ids", []) or [])
+    special_ids.update(
+        token for attr in ("bos_token_id", "eos_token_id", "pad_token_id")
+        if (token := getattr(tokenizer, attr, None)) is not None
+    )
     ids = set()
     for spelling in synonyms(word) if expand else [word]:
+        if not spelling or spelling.isspace():
+            continue
         for variant in {spelling, spelling.lower(), spelling.capitalize()}:
             for text in (variant, " " + variant):
                 tokens = tokenizer.encode(text, add_special_tokens=False)
-                if len(tokens) == 1:
+                if (
+                    len(tokens) == 1
+                    and tokens[0] not in special_ids
+                    and tokenizer.decode(
+                        tokens, clean_up_tokenization_spaces=False,
+                    ) == text
+                ):
                     ids.add(tokens[0])
     return ids
 
@@ -352,10 +427,13 @@ def readout_position(tokenizer, token_ids: Sequence[int], dataset: str) -> int:
 
 
 def token_ranks(logits: torch.Tensor, token_ids: set[int]) -> torch.Tensor:
-    """1-based rank of every token of `token_ids` in `logits` [..., vocab] -> [..., len(token_ids)]."""
-    ids = torch.tensor(sorted(token_ids), device=logits.device)
-    values = logits[..., ids]
-    return (logits.unsqueeze(-2) > values.unsqueeze(-1)).sum(-1) + 1
+    """1-based lexical ranks, descending score then ascending token ID.
+
+    Supply pre-softcap scores, not distribution logits, when available. Legacy
+    tensors are accepted but cannot recover ordering lost to saturation.
+    """
+    ids = torch.tensor(sorted(token_ids), device=logits.device, dtype=torch.long)
+    return selected_token_ranks(logits, ids)
 
 
 # --------------------------------------------------------------------------- #
@@ -369,10 +447,21 @@ def evaluate_readout(model: LensModel, lens: Lens, dataset: str, items: list[dic
 
     Returns ``(words, items)``:
 
+    Supply a lens returning ``LensReadout`` (e.g. built-in helpers with
+    ``return_readout=True``) for pre-softcap lexical ordering. Legacy tensors
+    remain distribution logits and cannot recover ordering lost to saturation.
+    Exact rank ties are resolved by ascending token ID, not optimistic ties.
+    Behavior/argmax columns always describe the actual distribution.
+
     * ``words`` — a row per (item, word). ``kind`` is ``intermediate``, ``target`` or
       ``control`` (intermediates of another item of the same dataset — a chance baseline).
       ``ranks`` is the 1-based rank at every layer, min over spellings (for order-ops —
       over the synonym set).
+    Targets use complete single-token spellings only, including order-ops
+    synonyms, for both ranks and correctness. Unsupported multi-token targets
+    have null ranks/correctness, not prefix hits. Intermediate/control probes
+    retain the historical first-token fallback in :func:`spelling_ids`.
+
     * ``items`` — a row per item: the model's answer, the lens top-1 at the readout position
       at every layer, and over all prompt positions: agreement of the layer top-1 with the
       model's top-1, the share of positions where the layer top-1 is the input token itself
@@ -390,7 +479,7 @@ def evaluate_readout(model: LensModel, lens: Lens, dataset: str, items: list[dic
 
 def _readout_rows(
     model: LensModel,
-    logits: torch.Tensor,
+    logits: torch.Tensor | LensReadout | Callable[[int], LensReadout],
     dataset: str,
     items: list[dict],
     i: int,
@@ -399,7 +488,18 @@ def _readout_rows(
     spelling_lookup: Callable[[str, bool], set[int]] | None = None,
     preserve_prompt_whitespace: bool = False,
 ) -> tuple[list[dict], dict]:
-    """The shared evaluation protocol, independent of how logits were obtained."""
+    """Score one layer at a time; a callable avoids retaining full dual readouts."""
+    if callable(logits):
+        layer_readout = logits
+        n_layers = model.n_layers
+    else:
+        if not isinstance(logits, LensReadout):
+            warn_legacy_readout(model)
+        result = as_readout(logits)
+        n_layers = result.logits.shape[0]
+
+        def layer_readout(layer):
+            return LensReadout(result.logits[layer], result.ranking_scores[layer])
     tok = model.tokenizer
     expand = dataset == "order-ops"
     item = items[i]
@@ -413,7 +513,7 @@ def _readout_rows(
 
     word_rows = []
     position = readout_position(tok, ids, dataset)
-    readout = logits[:, position]  # [n_layers, vocab]
+    word_token_ids = []
 
     other = items[(i + len(items) // 2) % len(items)]["intermediates"]
     words = [("intermediate", word, role) for role, word in enumerate(item["intermediates"])]
@@ -429,12 +529,16 @@ def _readout_rows(
     if not positions:
         raise ValueError(f"{dataset}/{item['name']}: no non-special prompt tokens")
     prompt_ids = {ids[position] for position in positions}
+    target_ids = set()
     for kind, word, role in words:
-        word_ids = lookup(word, expand)
-        ranks = (
-            token_ranks(readout, word_ids).min(-1).values.cpu().numpy()
-            if word_ids else None
-        )
+        if kind == "target" and spelling_lookup is None:
+            # Prefix probes are useful for intermediates, not completed answers.
+            word_ids = single_token_ids(tok, word, expand)
+        else:
+            word_ids = lookup(word, expand)
+        if kind == "target":
+            target_ids = word_ids
+        word_token_ids.append(word_ids)
         word_rows.append({
             "dataset": dataset,
             "item": item["name"],
@@ -446,22 +550,39 @@ def _readout_rows(
                 else bool(single_token_ids(tok, word, expand))
             ),
             "in_prompt": bool(word_ids & prompt_ids),
-            "ranks": ranks,
-            "best_rank": int(ranks.min()) if ranks is not None else None,
-            "best_layer": int(ranks.argmin()) if ranks is not None else None,
         })
 
-    # A tokenizer may emit BOS, multiple specials, or no specials at all.
-    top1 = logits[:, positions].argmax(-1)
-    log_probs = logits[:, positions].log_softmax(-1)
-    kl = (log_probs[-1].exp() * (log_probs[-1] - log_probs)).sum(-1).mean(-1)
-    input_ids = torch.tensor([ids[position] for position in positions], device=top1.device)
-    model_top1 = int(readout[-1].argmax())
-    # Opt-in strict scoring uses exactly the target rank's accepted spellings.
-    target_ids = (
-        lookup(item["target"], expand if spelling_lookup is not None else False)
-        if "target" in item else set()
-    )
+    # Retain final probabilities plus just one layer's distribution workspace.
+    final = layer_readout(n_layers - 1)
+    final_top = final.logits[positions].argmax(-1)
+    final_logp = final.logits[positions].float().log_softmax(-1)
+    final_prob = final_logp.exp()
+    model_top1 = int(final.logits[position].argmax())
+    input_ids = torch.tensor([ids[p] for p in positions], device=final_top.device)
+    agreements, copy_rates, kls, readout_tops, layer_ranks = [], [], [], [], []
+    for layer in range(n_layers):
+        current = final if layer == n_layers - 1 else layer_readout(layer)
+        layer_ranks.append([
+            token_ranks(current.ranking_scores[position], word_ids).min()
+            if word_ids else torch.tensor(-1, device=final_top.device)
+            for word_ids in word_token_ids
+        ])
+        top = current.logits[positions].argmax(-1)
+        logp = final_logp if layer == n_layers - 1 else current.logits[positions].float().log_softmax(-1)
+        kls.append((final_prob * (final_logp - logp)).sum(-1).mean())
+        agreements.append((top == final_top).float().mean())
+        copy_rates.append((top == input_ids).float().mean())
+        readout_tops.append(current.logits[position].argmax())
+        del current, logp, top
+    if word_rows:
+        ranks_by_word = torch.stack([torch.stack(r) for r in layer_ranks]).T.cpu().numpy()
+        for row, word_ids, ranks in zip(word_rows, word_token_ids, ranks_by_word, strict=True):
+            row.update(
+                ranks=ranks if word_ids else None,
+                best_rank=int(ranks.min()) if word_ids else None,
+                best_layer=int(ranks.argmin()) if word_ids else None,
+            )
+    # Reuse the target rank's accepted IDs, including arithmetic synonyms.
     item_row = {
         "dataset": dataset,
         "item": item["name"],
@@ -470,10 +591,10 @@ def _readout_rows(
         "readout_token": decode([ids[position]]),
         "model_top1": decode([model_top1]),
         "model_correct": model_top1 in target_ids if target_ids else None,
-        "readout_top1": [decode([t]) for t in readout.argmax(-1).tolist()],
-        "agreement": (top1 == top1[-1]).float().mean(-1).cpu().numpy(),
-        "copy_rate": (top1 == input_ids).float().mean(-1).cpu().numpy(),
-        "kl_to_final": kl.cpu().numpy(),
+        "readout_top1": [decode([t]) for t in torch.stack(readout_tops).tolist()],
+        "agreement": torch.stack(agreements).cpu().numpy(),
+        "copy_rate": torch.stack(copy_rates).cpu().numpy(),
+        "kl_to_final": torch.stack(kls).cpu().numpy(),
     }
     return word_rows, item_row
 
@@ -496,7 +617,8 @@ def evaluate_paired(
     evals: dict[str, list[dict]],
     desc: str = "paired lenses",
     *,
-    logit_readout: ActivationReadout = logit_lens_from_activations,
+    logit_readout: ActivationReadout | None = None,
+    layer_logit_readout: Callable[..., LensReadout] | None = None,
     spelling_lookup: Callable[[str, bool], set[int]] | None = None,
     preserve_prompt_whitespace: bool = False,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -506,21 +628,35 @@ def evaluate_paired(
     (``logit lens`` or ``J-lens``). Both use the exact same pre-final-norm residuals
     and final model logits. Only the J-lens transports inner-layer residuals.
     ``logit_readout(model, activations)`` can supply an explicit handwritten
-    baseline, returning ``[n_layers, seq_len, vocab]`` logits. Its final row
-    is set to the shared model output.
+    baseline, returning a ``LensReadout`` of ``[n_layers, seq_len, vocab]``.
+    Its final row is set to the shared model output. Legacy tensor callbacks
+    remain supported: BOTH lenses then rank distribution logits, with a warning
+    for known softcapped models. Use dual readouts to avoid saturation ordering
+    loss. Ties in either space are broken by ascending token ID.
     All inner layers must be fitted; silently substituting the logit lens for
     a missing Jacobian would make the comparison misleading.
 
-    Activations are released after each prompt, and only one lens's full
-    logits tensor is kept at a time; dataset-wide vocabulary logits are not
-    cached.
+    Activations are released after each prompt. Built-in readouts stream one
+    layer at a time, retaining the final model readout for comparison. Custom
+    callbacks may return full tensors; these are neither cloned nor mutated.
+    Alternatively, ``layer_logit_readout(model, activations, layers=[layer])``
+    returns a dual ``LensReadout`` of shape ``[1, seq_len, vocab]`` for each
+    inner baseline layer, without stacking vocabulary tensors across layers.
+    The two callback options are mutually exclusive; neither overrides the
+    shared final model readout. Dataset-wide vocabulary logits are not cached.
 
     Optional ``spelling_lookup(word, expand)`` overrides lexical scoring for
     both target ranks and correctness. Empty sets yield null ranks/correctness;
-    callers must report coverage and exclude null ranks from plotting helpers.
+    callers must report coverage. Summary helpers exclude null ranks from their
+    denominators; an entirely unsupported pass@k group has a NaN score.
     ``preserve_prompt_whitespace=True`` disables legacy prompt stripping.
-    Defaults retain the historical notebook protocol.
+    Default intermediate/control probes retain the historical prefix fallback;
+    default targets require complete single-token spellings. Multi-token-only
+    targets are unscorable (null), not incorrect or prefix-correct. This is
+    next-token lexical scoring, not generated multi-token answer accuracy.
     """
+    if logit_readout is not None and layer_logit_readout is not None:
+        raise ValueError("use only one of logit_readout and layer_logit_readout")
     if lens.d_model != model.d_model:
         raise ValueError("lens d_model does not match the model")
     missing = set(range(model.n_layers - 1)) - set(lens.source_layers)
@@ -537,31 +673,58 @@ def evaluate_paired(
                 model.forward(input_ids)
             # The final raw block output goes through the adapter's complete
             # readout, including any model-specific logit softcap.
-            final_logits = model.unembed(recorder.activations[model.n_layers - 1][0].float()).float()
+            final_readout = readout(model, recorder.activations[model.n_layers - 1][0].float())
+            legacy_scores = False
             for name in ("logit lens", "J-lens"):
-                if name == "logit lens":
-                    logits = logit_readout(model, recorder.activations)
-                    if logits.shape != (model.n_layers, *final_logits.shape):
+                callback_result = None
+                if name == "logit lens" and logit_readout is not None:
+                    value = logit_readout(model, recorder.activations)
+                    legacy_scores = not isinstance(value, LensReadout)
+                    if legacy_scores:
+                        warn_legacy_readout(model)
+                    callback_result = as_readout(value)
+                    del value
+                    expected = (model.n_layers, *final_readout.logits.shape)
+                    if (callback_result.logits.shape != expected
+                            or callback_result.ranking_scores.shape != expected):
                         raise ValueError("logit_readout must return [n_layers, seq_len, vocab]")
-                    logits[-1] = final_logits
-                else:
-                    layer_logits = []
-                    for layer in range(model.n_layers - 1):
-                        residual = recorder.activations[layer][0].float()
-                        transported = lens.transport(residual, layer)
-                        layer_logits.append(model.unembed(transported).float())
-                        del residual, transported
-                    logits = torch.stack([*layer_logits, final_logits])
-                    del layer_logits
+
+                def layer_readout(
+                    layer, final_readout=final_readout, callback_result=callback_result,
+                    activations=recorder.activations, name=name, legacy_scores=legacy_scores,
+                ):
+                    if layer == model.n_layers - 1:
+                        value = final_readout
+                    elif name == "logit lens" and layer_logit_readout is not None:
+                        value = layer_logit_readout(model, activations, layers=[layer])
+                        if not isinstance(value, LensReadout):
+                            raise TypeError("layer_logit_readout must return LensReadout")
+                        expected = (1, *final_readout.logits.shape)
+                        if (value.logits.shape != expected
+                                or value.ranking_scores.shape != expected):
+                            raise ValueError("layer_logit_readout must return [1, seq_len, vocab]")
+                        value = LensReadout(value.logits[0], value.ranking_scores[0])
+                    elif callback_result is not None:
+                        value = LensReadout(
+                            callback_result.logits[layer], callback_result.ranking_scores[layer],
+                        )
+                    else:
+                        residual = activations[layer][0].float()
+                        if name == "J-lens":
+                            residual = lens.transport(residual, layer)
+                        value = readout(model, residual)
+                    # Legacy callbacks compare both lenses in their available space.
+                    return LensReadout(value.logits, value.logits) if legacy_scores else value
+
                 rows, row = _readout_rows(
-                    model, logits, dataset, samples, i, ids,
+                    model, layer_readout, dataset, samples, i, ids,
                     spelling_lookup=spelling_lookup,
                     preserve_prompt_whitespace=preserve_prompt_whitespace,
                 )
                 word_rows.extend({**entry, "lens": name} for entry in rows)
                 item_rows.append({**row, "lens": name})
-                del logits
-            del recorder, final_logits
+                del callback_result, layer_readout
+            del recorder, final_readout
     return pd.DataFrame(word_rows), pd.DataFrame(item_rows)
 
 
@@ -572,28 +735,52 @@ def _layers(n_layers: int, layers: slice | Sequence[int] | None) -> np.ndarray:
 def pass_at_k(words: pd.DataFrame, ks: Sequence[int] = (1, 5, 10, 100), layers: slice | Sequence[int] | None = None) -> pd.DataFrame:
     """pass@k as in data/evaluations: mean over items of the fraction of words whose min-over-layers rank <= k.
 
-    `layers` restricts the min to some layers, e.g. ``slice(None, -1)`` — без выхода модели.
-    Long frame: [lens], dataset, kind, k, score.
+    ``layers`` restricts the min, e.g. ``slice(None, -1)`` excludes model output.
+    Null ranks are excluded, not misses; items without ranked words are omitted.
+    Entirely unsupported groups retain a NaN score. Coverage columns count words
+    and items before/after exclusion. Legacy intermediate prefix probes remain
+    ranked even when ``single_token`` is false.
     """
     keys = [c for c in ("lens", "dataset", "kind") if c in words]
+    counts = ["n_words", "n_words_scored", "n_items", "n_items_scored"]
     rows = []
     for key, group in words.groupby(keys):
-        ranks = np.stack(group["ranks"])
-        best = ranks[:, _layers(ranks.shape[1], layers)].min(1)
+        scored = group[group["ranks"].notna()]
+        coverage = dict(zip(counts, [
+            len(group), len(scored), group["item"].nunique(),
+            scored["item"].nunique(),
+        ], strict=True))
+        if not scored.empty:
+            ranks = np.stack(scored["ranks"])
+            best = ranks[:, _layers(ranks.shape[1], layers)].min(1)
         for k in ks:
-            score = pd.Series(best <= k, index=group.index).groupby(group["item"]).mean().mean()
-            rows.append({**dict(zip(keys, key, strict=False)), "k": k, "score": score})
-    return pd.DataFrame(rows)
+            score = (
+                pd.Series(best <= k, index=scored.index)
+                .groupby(scored["item"]).mean().mean()
+                if not scored.empty else np.nan
+            )
+            rows.append({**dict(zip(keys, key, strict=False)), "k": k,
+                         "score": score, **coverage})
+    return pd.DataFrame(rows, columns=[*keys, "k", "score", *counts])
 
 
 def layer_hit_rate(words: pd.DataFrame, k: int) -> pd.DataFrame:
-    """Share of words with rank <= k at every layer: [dataset x layer]."""
-    return pd.DataFrame({d: (np.stack(g["ranks"]) <= k).mean(0) for d, g in words.groupby("dataset", sort=False)}).T
+    """Share of ranked words with rank <= k: [dataset x layer].
+
+    Null ranks are excluded; datasets with no ranked words are omitted. Report
+    coverage separately (e.g. using :func:`pass_at_k`), not as zero hit rates.
+    """
+    scored = words[words["ranks"].notna()]
+    return pd.DataFrame({d: (np.stack(g["ranks"]) <= k).mean(0) for d, g in scored.groupby("dataset", sort=False)}).T
 
 
 def layer_median_rank(words: pd.DataFrame) -> pd.DataFrame:
-    """Median rank at every layer: [dataset x layer]."""
-    return pd.DataFrame({d: np.median(np.stack(g["ranks"]), 0) for d, g in words.groupby("dataset", sort=False)}).T
+    """Median of non-null ranks: [dataset x layer].
+
+    Datasets with no ranked words are omitted, as in :func:`layer_hit_rate`.
+    """
+    scored = words[words["ranks"].notna()]
+    return pd.DataFrame({d: np.median(np.stack(g["ranks"]), 0) for d, g in scored.groupby("dataset", sort=False)}).T
 
 
 def layer_mean(items: pd.DataFrame, column: str) -> pd.DataFrame:
