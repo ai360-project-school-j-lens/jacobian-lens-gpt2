@@ -23,6 +23,11 @@ import torch
 from jlens.evaluation import readout_position, single_token_ids, spelling_ids
 from jlens.hooks import ActivationRecorder
 from jlens.protocol import LensModel
+from jlens.readout import LensReadout, as_readout, selected_token_ranks
+
+# Version 2 requires complete target spellings and null unsupported ranks.
+# Version 1 (including unversioned files) allowed target-prefix hits.
+READOUT_CACHE_VERSION = 2
 
 
 @dataclasses.dataclass
@@ -42,12 +47,18 @@ class ReadoutCache:
     words: pd.DataFrame
 
     def save(self, path: str | Path) -> None:
-        torch.save({"H": self.H, "items": self.items.to_dict("list"),
+        torch.save({"version": READOUT_CACHE_VERSION,
+                    "H": self.H, "items": self.items.to_dict("list"),
                     "words": self.words.to_dict("list")}, path)
 
     @classmethod
     def load(cls, path: str | Path) -> ReadoutCache:
         raw = torch.load(path, weights_only=False)
+        if raw.get("version") != READOUT_CACHE_VERSION:
+            raise ValueError(
+                "Incompatible readout cache scoring version; rebuild the cache "
+                "and any derived ranks/results (old targets may contain prefixes)."
+            )
         return cls(raw["H"], pd.DataFrame(raw["items"]), pd.DataFrame(raw["words"]))
 
 
@@ -89,7 +100,10 @@ def build_readout_cache(model: LensModel, evals: dict[str, list[dict]]) -> Reado
                 words.append(("target", item["target"], 0))
             prompt_ids = {token for token in ids if token not in special}
             for kind, word, role in words:
-                word_ids = spelling_ids(tok, word, expand)
+                word_ids = (
+                    single_token_ids(tok, word, expand) if kind == "target"
+                    else spelling_ids(tok, word, expand)
+                )
                 word_rows.append({
                     "item_index": item_index, "dataset": dataset, "item": item["name"],
                     "kind": kind, "word": word, "role": role,
@@ -106,23 +120,32 @@ class WordRanker:
 
     def __init__(self, words: pd.DataFrame, device: str | torch.device = "cpu") -> None:
         self.n_words = len(words)
-        width = int(words.ids.map(len).max())
-        ids = torch.zeros(self.n_words, width, dtype=torch.long)
-        mask = torch.zeros(self.n_words, width, dtype=torch.bool)
-        for row, word_ids in enumerate(words.ids):
+        supported = np.flatnonzero(words.ids.map(len).to_numpy() > 0)
+        supported_words = words.iloc[supported]
+        width = max(map(len, supported_words.ids), default=1)
+        ids = torch.zeros(len(supported), width, dtype=torch.long)
+        mask = torch.zeros(len(supported), width, dtype=torch.bool)
+        for row, word_ids in enumerate(supported_words.ids):
             ids[row, : len(word_ids)] = torch.tensor(word_ids)
             mask[row, : len(word_ids)] = True
         self.device = torch.device(device)
         self.ids, self.mask = ids.to(self.device), mask.to(self.device)
-        self.word_item = torch.tensor(words.item_index.values, device=self.device)
+        self.supported = torch.tensor(supported, device=self.device)
+        self.word_item = torch.tensor(
+            supported_words.item_index.values, dtype=torch.long, device=self.device,
+        )
 
     @torch.no_grad()
-    def __call__(self, logits: torch.Tensor, row_chunk: int = 512) -> np.ndarray:
+    def __call__(self, logits: torch.Tensor | LensReadout, row_chunk: int = 512) -> np.ndarray:
         """``logits [..., n_items, vocab]`` -> ranks ``[..., n_words]``.
 
         1-based rank among all tokens, minimum over the word's spellings (ties
-        resolved as in :func:`jlens.evaluation.token_ranks`).
+        resolved as in :func:`jlens.evaluation.token_ranks`). Empty accepted-ID
+        sets yield NaN, never a vocabulary sentinel rank or an answer-prefix hit.
         """
+        if row_chunk < 1:
+            raise ValueError("row_chunk must be positive")
+        logits = as_readout(logits).ranking_scores
         lead, (n_items, vocab) = logits.shape[:-2], logits.shape[-2:]
         flat = logits.reshape(-1, vocab).to(self.device)
         batch = flat.shape[0] // n_items
@@ -131,19 +154,31 @@ class WordRanker:
         ranks = torch.empty(len(rows), dtype=torch.int32, device=self.device)
         for start in range(0, len(rows), row_chunk):
             chunk = slice(start, start + row_chunk)
-            word_logits = flat[rows[chunk]].float()
-            best = word_logits.gather(1, ids[chunk]).masked_fill(~mask[chunk], -torch.inf).max(1).values
-            ranks[chunk] = (word_logits > best[:, None]).sum(1).int() + 1
-        return ranks.reshape(*lead, self.n_words).cpu().numpy()
+            values = flat[rows[chunk, None], ids[chunk]].masked_fill(~mask[chunk], -torch.inf)
+            best = values.max(1).values
+            best_ids = ids[chunk].masked_fill(
+                ~mask[chunk] | (values != best[:, None]), vocab,
+            ).min(1).values
+            ranks[chunk] = selected_token_ranks(
+                flat, best_ids[:, None], row_indices=rows[chunk],
+            ).squeeze(-1).int()
+        out = torch.full(
+            (batch, self.n_words), torch.nan, dtype=torch.float64, device=self.device,
+        )
+        out[:, self.supported] = ranks.reshape(batch, len(self.supported)).double()
+        return out.reshape(*lead, self.n_words).cpu().numpy()
 
     @torch.no_grad()
     def rank_residuals(
         self,
-        readout: Callable[[torch.Tensor], torch.Tensor],
+        readout: Callable[[torch.Tensor], torch.Tensor | LensReadout],
         residuals: torch.Tensor,
         batch: int = 4,
     ) -> np.ndarray:
-        """``readout`` (e.g. ``model.unembed``) of ``residuals [B, n_items, d]`` -> ranks ``[B, n_words]``.
+        """Read ``residuals [B, n_items, d]`` into ranks ``[B, n_words]``.
+
+        Prefer ``lambda h: jlens.readout.readout(model, h)`` for pre-softcap
+        lexical ordering. Legacy tensor readouts cannot undo saturation.
 
         ``batch`` bounds memory: ``batch * n_items`` vocabulary rows at a time.
         """
@@ -155,12 +190,22 @@ class WordRanker:
 
 
 def words_frame(words: pd.DataFrame, ranks: np.ndarray) -> pd.DataFrame:
-    """``_readout_rows``-style frame from ranks ``[n_words, n_layers]`` (last = model output)."""
+    """Direct-evaluation frame from ``[n_words, n_layers]`` ranks.
+
+    Unsupported words retain null ranks and summaries, as in ``_readout_rows``.
+    """
     frame = words.drop(columns=["ids", "item_index"]).copy()
-    frame["ranks"] = list(ranks)
-    frame["best_rank"] = ranks.min(1)
-    frame["best_layer"] = ranks.argmin(1)
-    frame["inner_best"] = ranks[:, :-1].min(1)
+    supported = (words.ids.map(len).to_numpy() > 0) & np.isfinite(ranks).all(1)
+    frame["ranks"] = [
+        row if valid else None for row, valid in zip(ranks, supported, strict=True)
+    ]
+    for column in ("best_rank", "best_layer", "inner_best"):
+        frame[column] = np.nan
+    valid_ranks = ranks[supported]
+    frame.loc[supported, "best_rank"] = valid_ranks.min(1)
+    frame.loc[supported, "best_layer"] = valid_ranks.argmin(1)
+    if ranks.shape[1] > 1:
+        frame.loc[supported, "inner_best"] = valid_ranks[:, :-1].min(1)
     return frame
 
 
@@ -178,15 +223,23 @@ def item_scores(
     over ``layers`` (default: inner layers), or ``log10`` of that best rank if
     ``k`` is None; an item's score is the mean over its words of this kind.
     Returns ``[..., n_items_of_dataset]`` in ``item_index`` order, NaN for items
-    without such words. The mean over items of ``k`` scores is pass@k.
+    without supported words. Empty accepted-ID sets and null ranks are excluded
+    from denominators, not counted as misses. The NaN-aware mean over items of
+    ``k`` scores is pass@k.
     """
     in_dataset = (words.dataset == dataset).values
     items = np.unique(words.item_index.values[in_dataset])
-    sel = in_dataset & (words.kind == kind).values
+    sel = (
+        in_dataset & (words.kind == kind).values
+        & (words.ids.map(len).to_numpy() > 0)
+    )
     best = ranks[..., sel, :][..., layers].min(-1)
+    valid = np.isfinite(best)
     x = np.log10(best) if k is None else (best <= k).astype(float)
     membership = np.zeros((len(items), int(sel.sum())))
     membership[np.searchsorted(items, words.item_index.values[sel]), np.arange(int(sel.sum()))] = 1
-    counts = membership.sum(1)
+    counts = valid.astype(float) @ membership.T
     with np.errstate(invalid="ignore", divide="ignore"):
-        return np.where(counts > 0, (x @ membership.T) / counts, np.nan)
+        return np.where(
+            counts > 0, (np.where(valid, x, 0) @ membership.T) / counts, np.nan,
+        )

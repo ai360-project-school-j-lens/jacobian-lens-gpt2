@@ -314,7 +314,7 @@ def test_identity_scoped_restoration(namespace, precision, failure):
         assert not torch.backends.cuda.matmul.allow_tf32
         assert not torch.backends.cudnn.allow_tf32
         assert not torch.is_autocast_enabled("cpu")
-        assert kwargs["logit_readout"] is ns["handwritten_logit_lens"]
+        assert kwargs["layer_logit_readout"] is ns["handwritten_logit_lens"]
         if failure == "evaluation":
             raise RuntimeError("evaluation failed")
         frame = pd.DataFrame({"lens": ["logit lens", "J-lens"],

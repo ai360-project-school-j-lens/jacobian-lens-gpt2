@@ -47,6 +47,12 @@ class LensModel(Protocol):
         ...
 
     def unembed(self, residual: torch.Tensor) -> torch.Tensor:
-        """Map a residual-stream tensor ``[..., d_model]`` to logits
-        ``[..., vocab_size]`` (final norm + LM head)."""
+        """Map residuals ``[..., d_model]`` to actual distribution logits
+        ``[..., vocab_size]`` (final norm + LM head + model logit transforms).
+
+        Optional ``unembed_readout(residual) -> jlens.LensReadout`` can also
+        expose lexical scores before monotone saturating transforms. It is not
+        a required protocol member: legacy adapters remain valid. Evaluation
+        falls back to these logits when that capability is absent.
+        """
         ...

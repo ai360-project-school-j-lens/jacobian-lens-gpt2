@@ -222,12 +222,13 @@ def target_final_counts(
     all_words: pd.DataFrame, items: pd.DataFrame, *, k: int = 10,
     datasets: Sequence[str] | None = None,
 ) -> pd.DataFrame:
-    """Shared final-output strict-rank hits @1/@k for the annotated answer target.
+    """Shared final-output lexical-rank hits @1/@k for the annotated answer target.
 
     One target per annotated item, deduplicated across lenses. Final ranks and
     support must agree across copies. This is NOT retrieval of the final prompt
-    token, nor rank of the model's own prediction. Tied rank-1 hits need not equal
-    argmax correctness. Unsupported/no-target datasets have NaN hit rates.
+    token, nor rank of the model's own prediction. Deterministic pre-softcap
+    rank-1 hits can differ from distribution argmax correctness after saturation.
+    Unsupported/no-target datasets have NaN hit rates.
     """
     _positive_k(k)
     model_items = _model_items(items)

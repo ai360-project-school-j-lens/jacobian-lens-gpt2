@@ -110,8 +110,20 @@ class TestPairedEvaluation(unittest.TestCase):
                 right = frame[frame.lens == "J-lens"].drop(columns="lens").reset_index(drop=True)
                 if lens.n_prompts == 0:
                     pd.testing.assert_frame_equal(left, right)
-            a, b = (words[words.lens == name] for name in ("logit lens", "J-lens"))
-            np.testing.assert_array_equal(np.stack(a.ranks)[:, -1], np.stack(b.ranks)[:, -1])
+            a, b = (words[words.lens == name].reset_index(drop=True)
+                    for name in ("logit lens", "J-lens"))
+            # Support itself must match; do not silently drop mismatched rows.
+            pd.testing.assert_series_equal(a.ranks.isna(), b.ranks.isna())
+            unsupported = a.ranks.isna()
+            self.assertTrue(unsupported.any())
+            self.assertTrue((~unsupported).any())
+            self.assertTrue(a.loc[unsupported, "kind"].eq("target").all())
+            self.assertFalse(a.loc[unsupported, "single_token"].any())
+            self.assertTrue(a.loc[unsupported, ["best_rank", "best_layer"]].isna().all().all())
+            np.testing.assert_array_equal(
+                np.stack(a.loc[~unsupported, "ranks"])[:, -1],
+                np.stack(b.loc[~unsupported, "ranks"])[:, -1],
+            )
             np.testing.assert_allclose(np.stack(items.agreement)[:, -1], 1)
             np.testing.assert_allclose(np.stack(items.kl_to_final)[:, -1], 0, atol=1e-6)
 
@@ -153,6 +165,15 @@ class TestPairedEvaluation(unittest.TestCase):
                     plt.close("all")
         self.assertEqual(len(namespace["model_items"]), sum(map(len, self.evals.values())))
         self.assertEqual(len(namespace["head_to_head"]), len(namespace["inter"]) // 2)
+        coverage = namespace["answer_coverage"]
+        self.assertEqual(coverage.total.sum(), sum(map(len, self.evals.values())))
+        self.assertGreater(coverage.unsupported.sum(), 0)
+        # The ASCII tokenizer cannot encode any of these annotated targets whole.
+        self.assertEqual(coverage.supported.sum(), 0)
+        self.assertTrue(coverage.loc[coverage.supported.eq(0), "supported_accuracy"].isna().all())
+        unsupported = namespace["words"].ranks.isna()
+        self.assertTrue(namespace["words"].loc[unsupported, "inner_best"].isna().all())
+        self.assertTrue(any("target coverage" in line for line in namespace["lines"]))
         self.assertTrue(any("single-token" in line for line in namespace["lines"]))
         self.assertTrue(any("inner-layer pass@" in line for line in namespace["lines"]))
         distributions.assert_not_called()
@@ -160,6 +181,56 @@ class TestPairedEvaluation(unittest.TestCase):
         self.assertIsNone(namespace["held_out_metrics"])
         self.assertIsNone(namespace["fig55"])
         self.assertIsNone(namespace["fig56"])
+
+    def test_both_gpt2_notebooks_handle_mixed_answer_support(self):
+        evals = {dataset: [dict(sample) for sample in samples]
+                 for dataset, samples in self.evals.items()}
+        # Keep real unsupported annotations while introducing one whole-token answer.
+        evals["order-ops"][0]["target"] = "7"
+        for path, start, imports in (
+            (NOTEBOOK, "sanity_evals =", "import matplotlib"),
+            (REPO / "notebooks/logit_lens/logit_lens_dataset.ipynb",
+             "words, items =", "from functools import partial"),
+        ):
+            with self.subTest(notebook=path.name):
+                notebook = nbformat.read(path, as_version=4)
+                nbformat.validate(notebook)
+                namespace = {
+                    "gpt": self.gpt, "fitted_lens": self.lens, "evals": evals,
+                    "logit": partial(logit_lens, self.gpt),
+                    "LENS_NAMES": ("logit lens", "J-lens"), "LAYER_STRIDE": 1,
+                    "K": 5, "KS": [1, 5, 10, 100], "LAST": self.gpt.n_layers - 1,
+                }
+                analysis = False
+                with (contextlib.redirect_stdout(io.StringIO()),
+                      contextlib.redirect_stderr(io.StringIO()),
+                      patch.object(plt, "show")):
+                    for index, cell in enumerate(notebook.cells):
+                        if cell.cell_type != "code":
+                            continue
+                        if cell.source.startswith(start):
+                            analysis = True
+                        if cell.source.startswith(imports) or analysis:
+                            exec(compile(cell.source, f"{path.name}:{index}", "exec"), namespace)
+                            plt.close("all")
+                coverage = namespace["answer_coverage"]
+                self.assertEqual(coverage.supported.sum(), 1)
+                self.assertEqual(coverage.loc["order-ops", "annotated"], 2)
+                self.assertEqual(coverage.loc["order-ops", "unsupported"], 1)
+                scored_items = namespace["with_target"]
+                self.assertEqual(len(scored_items), 1)  # Never doubled for paired lenses.
+                self.assertEqual(namespace["accuracy"]["order-ops"],
+                                 float(scored_items.iloc[0].model_correct))
+                targets = namespace["scores"].query("kind == 'target' and k == 1")
+                supported = targets[targets.dataset.eq("order-ops")]
+                self.assertTrue(supported.n_items.eq(2).all())
+                self.assertTrue(supported.n_items_scored.eq(1).all())
+                # Final target hit@1 must equal model correctness for these untied logits.
+                final = namespace["output"].query("kind == 'target' and k == 1")
+                self.assertTrue(final.loc[final.dataset.eq("order-ops"), "score"].eq(
+                    namespace["accuracy"]["order-ops"]
+                ).all())
+                self.assertTrue(targets.loc[~targets.dataset.eq("order-ops"), "score"].isna().all())
 
     def test_reference_section_opt_in_uses_supplied_texts_and_cached_plots(self):
         notebook = nbformat.read(NOTEBOOK, as_version=4)

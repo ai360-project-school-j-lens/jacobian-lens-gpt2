@@ -27,6 +27,7 @@ from jlens.metrics import (
     _special_ids,
 )
 from jlens.protocol import LensModel
+from jlens.readout import readout, selected_token_ranks
 from jlens.strict_scoring import ExplicitPromptModel
 
 __all__ = ["evaluate_paired_batched", "evaluate_distributions_batched"]
@@ -212,11 +213,14 @@ def _decode(model, lens, activations, layer, rows, positions, transport, matrice
     # unembed owns final norm, head, dtype/device moves and optional softcap.
     # Disable both common ambient autocast contexts for sharded HF models.
     with torch.autocast("cpu", enabled=False), torch.autocast("cuda", enabled=False):
-        logits = model.unembed(residual)
+        result = readout(model, residual)
+    logits = result.logits
     _device(logits.device)
     if logits.ndim != 2 or logits.shape[0] != len(rows):
         raise ValueError("unembed must return [positions, vocabulary] logits")
-    return logits
+    if result.ranking_scores.shape != logits.shape or result.ranking_scores.device != logits.device:
+        raise ValueError("Ranking scores must match logits shape/device")
+    return result
 
 
 def _rank_plan(chunk, batch, word_offsets, device):
@@ -336,7 +340,8 @@ def _run_batch(
                 matrices,
             )
 
-        final_logits = decode(layers - 1)
+        final_readout = decode(layers - 1)
+        final_logits = final_readout.logits
         output_device = final_logits.device
         if ranks is None:
             ranks = torch.full(
@@ -379,12 +384,13 @@ def _run_batch(
                     model_ranks[1, layer] = model_ranks[0, layer]
                     totals[1, layer] = totals[0, layer]
                     continue
-                logits = (
-                    final_logits if layer == layers - 1 else decode(layer, name == 1)
+                result = (
+                    final_readout if layer == layers - 1 else decode(layer, name == 1)
                 )
+                logits, scores = result.logits, result.ranking_scores
                 if logits.shape != final_logits.shape or logits.device != output_device:
                     raise ValueError("All readouts must share vocabulary shape/device")
-                finite &= torch.isfinite(logits).all()
+                finite &= torch.isfinite(logits).all() & torch.isfinite(scores).all()
                 top = final_top if layer == layers - 1 else logits.argmax(-1)
                 logp = (
                     final_logp
@@ -405,21 +411,27 @@ def _run_batch(
                 for offset in range(0, len(rr), rank_chunk_size):
                     readout_rows = rr[offset : offset + rank_chunk_size]
                     readout_owners = ro[offset : offset + rank_chunk_size]
-                    predicted = logits[readout_rows, final_top[readout_rows]]
-                    model_ranks[name, layer, readout_owners] = (
-                        logits[readout_rows] > predicted[:, None]
-                    ).sum(-1) + 1
+                    model_ranks[name, layer, readout_owners] = selected_token_ranks(
+                        scores, final_top[readout_rows, None], row_indices=readout_rows,
+                    ).squeeze(-1)
                 if len(wi):
                     best = torch.full(
-                        (len(wi),), -torch.inf, device=output_device, dtype=logits.dtype
+                        (len(wi),), -torch.inf, device=output_device, dtype=scores.dtype
                     )
-                    best.scatter_reduce_(0, sw, logits[sr, si], reduce="amax")
+                    spelling_scores = scores[sr, si]
+                    best.scatter_reduce_(0, sw, spelling_scores, reduce="amax")
+                    # Pick the earliest ID among equally best accepted spellings.
+                    best_ids = torch.full_like(wi, scores.shape[-1])
+                    candidates = torch.where(spelling_scores == best[sw], si, scores.shape[-1])
+                    best_ids.scatter_reduce_(0, sw, candidates, reduce="amin")
                     for offset in range(0, len(wi), rank_chunk_size):
                         sl = slice(offset, offset + rank_chunk_size)
-                        ranked = (logits[wr[sl]] > best[sl, None]).sum(-1) + 1
-                        ranks[name, layer, wi[sl]] = ranked
-                del logits, logp, top, kl, measures
-        del final_logits, final_logp, final_prob, final_top
+                        ranked = selected_token_ranks(
+                            scores, best_ids[sl, None], row_indices=wr[sl],
+                        )
+                        ranks[name, layer, wi[sl]] = ranked.squeeze(-1)
+                del result, logits, scores, logp, top, kl, measures
+        del final_readout, final_logits, final_logp, final_prob, final_top
     finite &= torch.isfinite(totals).all()
     # Only batch-level synchronizations; no per-item or per-word GPU readback.
     if not bool(finite.cpu()):
@@ -484,7 +496,10 @@ def evaluate_paired_batched(
     Existing columns match strict ``evaluate_paired``; additional numeric-ID
     columns make argmax target-hit curves independent of display/gloss text.
     ``model_prediction_ranks`` tracks the exact final model argmax ID's rank
-    at each block (strictly greater logits + 1), independently of targets.
+    in pre-softcap lexical scores at each block, independently of targets.
+    Ranks break ties by ascending token ID; the final prediction's lexical rank
+    need not be 1 if softcapping tied distinct head scores. Actual argmax,
+    correctness, agreement, copy rate and KL still use distribution logits.
     Final logits, ranks, correctness and behavioral metrics are shared exactly
     between lenses, ignoring any fitted final-layer J. Correctness is therefore
     independent of the lens, but depends on the adapter's final readout.
@@ -637,7 +652,7 @@ def _run_distribution_batch(model, lens, batch, padded, chunk_size, matrices):
             rows, positions = indices[activations[layer].device]
             logits = _decode(
                 model, lens, activations, layer, rows, positions, transported, matrices
-            )
+            ).logits
             shape_device = (logits.shape[1], logits.device)
             if reference is None:
                 reference = shape_device
