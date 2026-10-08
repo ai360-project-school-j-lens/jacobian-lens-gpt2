@@ -18,6 +18,9 @@ dependencies = [
     "pandas>=2.3.3",
     "matplotlib>=3.10.9",
     "datasets>=4.8.5",
+    "scipy>=1.14",
+    "tqdm>=4.66",
+    "ipython>=8.18",
 ]
 
 [project.urls]
@@ -25,7 +28,7 @@ Repository = "https://github.com/anthropics/jacobian-lens"
 Paper = "https://transformer-circuits.pub/2026/workspace/index.html"
 
 [project.optional-dependencies]
-dev = ["pytest", "ruff", "datasets"]
+dev = ["pytest", "ruff", "datasets", "nbformat"]
 
 [tool.ruff]
 line-length = 88
