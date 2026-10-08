@@ -21,7 +21,12 @@ from jlens.hooks import ActivationRecorder
 from jlens.lens import JacobianLens
 from jlens.protocol import LensModel
 
-__all__ = ["DistributionMetrics", "evaluate_distributions", "lens_vector_geometry"]
+__all__ = [
+    "DistributionMetrics",
+    "evaluate_distributions",
+    "lens_vector_geometry",
+    "spearman_lens_vs_logits",
+]
 
 _NAMES = ("logit lens", "J-lens")
 _LAYER_COLUMNS = [
@@ -484,3 +489,56 @@ def lens_vector_geometry(
         )
         del matrix
     return pd.DataFrame(rows, columns=_GEOMETRY_COLUMNS)
+
+
+def _average_ranks(values: torch.Tensor) -> torch.Tensor:
+    """1-based ranks of a 1-D tensor with ties averaged (scipy's ``average`` method)."""
+    ranks = torch.empty_like(values)
+    ranks[values.argsort()] = torch.arange(
+        1, values.numel() + 1, dtype=values.dtype, device=values.device
+    )
+    unique, inverse = values.unique(return_inverse=True)
+    zeros = torch.zeros(unique.numel(), dtype=values.dtype, device=values.device)
+    totals = zeros.index_add(0, inverse, ranks)
+    counts = zeros.index_add(0, inverse, torch.ones_like(ranks))
+    return (totals / counts)[inverse]
+
+
+def spearman_lens_vs_logits(
+    lens_scores: torch.Tensor,
+    model_logits: torch.Tensor,
+    candidate_ids: Sequence[int],
+) -> float:
+    """Spearman correlation between a lens readout and the model's own next-token
+    logits, restricted to a candidate answer set.
+
+    The paper's verbal-report metric: at the position just before the model names its
+    answer, does the lens rank the candidate answers the way the model's output
+    distribution does? Restricting to a candidate set is what makes the number
+    meaningful -- over the full vocabulary the correlation is dominated by the
+    ordering of tokens that are irrelevant to the question.
+
+    Args:
+        lens_scores: ``[vocab]`` lens logits at the readout position.
+        model_logits: ``[vocab]`` model logits at the same position.
+        candidate_ids: Vocabulary ids to correlate over. Duplicates are dropped and
+            the given order is irrelevant to the result.
+
+    Returns:
+        Spearman rho, or NaN when fewer than two distinct candidates are given or
+        either side is constant across them.
+    """
+    ids = list(dict.fromkeys(int(i) for i in candidate_ids))
+    if len(ids) < 2:
+        return float("nan")
+    index = torch.tensor(ids, device=lens_scores.device)
+    lens_rank = _average_ranks(lens_scores.float().flatten()[index])
+    model_rank = _average_ranks(
+        model_logits.float().flatten()[index.to(model_logits.device)]
+    ).to(lens_rank.device)
+    left = lens_rank - lens_rank.mean()
+    right = model_rank - model_rank.mean()
+    denominator = left.norm() * right.norm()
+    if denominator == 0:
+        return float("nan")
+    return float((left * right).sum() / denominator)
