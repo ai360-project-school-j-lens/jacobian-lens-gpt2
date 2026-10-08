@@ -76,7 +76,8 @@ class ExplicitPromptModel:
     def __getattr__(self, name):
         return getattr(self.model, name)
 
-    def encode(self, text: str, *, max_length: int = 512) -> torch.Tensor:
+    def encode_ids(self, text: str, *, max_length: int = 512) -> list[int]:
+        """Encode on CPU for length grouping without per-prompt device transfers."""
         ids = self.tokenizer.encode(
             text, add_special_tokens=self.bos_policy == "tokenizer",
         )
@@ -89,4 +90,8 @@ class ExplicitPromptModel:
                 f"Prompt has {len(ids)} tokens, exceeding {max_length}; "
                 "shorten it explicitly rather than silently moving the readout"
             )
+        return list(ids)
+
+    def encode(self, text: str, *, max_length: int = 512) -> torch.Tensor:
+        ids = self.encode_ids(text, max_length=max_length)
         return torch.tensor([ids], dtype=torch.long, device=self.input_device)

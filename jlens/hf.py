@@ -15,6 +15,7 @@ minimal example) and the rest of the package works unchanged.
 from __future__ import annotations
 
 import functools
+import inspect
 from dataclasses import dataclass
 from typing import Any
 
@@ -154,14 +155,43 @@ class HFLensModel:
     def input_device(self) -> torch.device:
         return self._embed_tokens.weight.device
 
-    def encode(self, text: str, *, max_length: int = 512) -> torch.Tensor:
+    def encode_ids(self, text: str, *, max_length: int = 512) -> list[int]:
+        """CPU token IDs with the same special-token/truncation policy as encode."""
         encoded = self.tokenizer(
             text, return_tensors="pt", truncation=True, max_length=max_length
         )
-        return encoded.input_ids.to(self.input_device)
+        return encoded.input_ids[0].tolist()
 
-    def forward(self, input_ids: torch.Tensor) -> Any:
-        return self._text_module(input_ids=input_ids, use_cache=False)
+    def encode(self, text: str, *, max_length: int = 512) -> torch.Tensor:
+        ids = self.encode_ids(text, max_length=max_length)
+        return torch.tensor([ids], dtype=torch.long, device=self.input_device)
+
+    @property
+    def supports_attention_mask(self) -> bool:
+        """Whether the bare decoder explicitly advertises a padding-mask API.
+
+        A catch-all **kwargs is not evidence that padding masks are consumed.
+        Unknown/custom decoders can still use exact equal-length batching.
+        """
+        try:
+            parameters = inspect.signature(self._text_module.forward).parameters
+        except (TypeError, ValueError):
+            return False
+        return "attention_mask" in parameters
+
+    def forward(
+        self, input_ids: torch.Tensor, *, attention_mask: torch.Tensor | None = None
+    ) -> Any:
+        if attention_mask is None:
+            return self._text_module(input_ids=input_ids, use_cache=False)
+        if not self.supports_attention_mask:
+            raise NotImplementedError(
+                "This HF text decoder does not advertise attention_mask; "
+                "use equal-length batches without padding"
+            )
+        return self._text_module(
+            input_ids=input_ids, attention_mask=attention_mask, use_cache=False
+        )
 
     def unembed(self, residual: torch.Tensor) -> torch.Tensor:
         target_device = self._lm_head.weight.device
