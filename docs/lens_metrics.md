@@ -1,13 +1,15 @@
 # Held-out lens metrics and linear-head geometry
 
-Public imports (independent of the existing evaluation/plotting modules):
+Recommended batched API for new Figure 55/56-style notebook analyses:
 
 ```python
-from jlens.metrics import evaluate_distributions, lens_vector_geometry
+from jlens.batched_evaluation import evaluate_distributions_batched
+from jlens.metrics import lens_vector_geometry
 
-metrics = evaluate_distributions(
+metrics = evaluate_distributions_batched(
     model, fitted_lens, held_out_texts,
-    max_seq_len=128, position_chunk_size=8, progress=True,
+    batch_size=8, max_batch_tokens=2048, max_seq_len=128,
+    position_chunk_size=8, batching="auto", progress=True,
 )
 layer_table = metrics.layers
 pair_table = metrics.pairs
@@ -23,7 +25,21 @@ Record the model ID, model/lens dtype, TF32 settings, corpus, truncation, and
 fitting configuration with results. Use independently held-out texts, not the
 fitting corpus or an implicitly substituted task-prompt set.
 
-## Distribution API
+## Batched distribution API
+
+`jlens.batched_evaluation.evaluate_distributions_batched` returns the exact
+`DistributionMetrics.layers` / `.pairs` schemas documented below, for all
+blocks and same-layer cross-lens pairs only. It shares the task evaluator's
+length grouping, attention-mask handling and cached Jacobians. Non-special,
+non-padding positions receive strict token weights; full-vocabulary readouts
+are chunked by position and streamed by layer. The last real position counts.
+One shared forward is performed per batch, not per text. See
+[batched evaluation](batched_evaluation.md#batched-held-out-distributions-figures-5556)
+for the signature, adapter/encoding policies, memory limits and provenance.
+Use it for new experiments; the serial API below is retained for compatibility
+and reference comparisons, not as the recommended corpus execution path.
+
+## Serial reference distribution API
 
 ```python
 evaluate_distributions(

@@ -395,12 +395,22 @@ def _readout_rows(
     items: list[dict],
     i: int,
     ids: list[int],
+    *,
+    spelling_lookup: Callable[[str, bool], set[int]] | None = None,
+    preserve_prompt_whitespace: bool = False,
 ) -> tuple[list[dict], dict]:
     """The shared evaluation protocol, independent of how logits were obtained."""
     tok = model.tokenizer
     expand = dataset == "order-ops"
     item = items[i]
-    prompt = item["prompt"].rstrip()
+    prompt = item["prompt"] if preserve_prompt_whitespace else item["prompt"].rstrip()
+    lookup = spelling_lookup or (lambda word, expand: spelling_ids(tok, word, expand))
+
+    def decode(token_ids):
+        if spelling_lookup is not None:
+            return tok.decode(token_ids, clean_up_tokenization_spaces=False)
+        return tok.decode(token_ids)
+
     word_rows = []
     position = readout_position(tok, ids, dataset)
     readout = logits[:, position]  # [n_layers, vocab]
@@ -420,19 +430,25 @@ def _readout_rows(
         raise ValueError(f"{dataset}/{item['name']}: no non-special prompt tokens")
     prompt_ids = {ids[position] for position in positions}
     for kind, word, role in words:
-        word_ids = spelling_ids(tok, word, expand)
-        ranks = token_ranks(readout, word_ids).min(-1).values.cpu().numpy()
+        word_ids = lookup(word, expand)
+        ranks = (
+            token_ranks(readout, word_ids).min(-1).values.cpu().numpy()
+            if word_ids else None
+        )
         word_rows.append({
             "dataset": dataset,
             "item": item["name"],
             "kind": kind,
             "word": word,
             "role": role,
-            "single_token": bool(single_token_ids(tok, word, expand)),
+            "single_token": (
+                bool(word_ids) if spelling_lookup is not None
+                else bool(single_token_ids(tok, word, expand))
+            ),
             "in_prompt": bool(word_ids & prompt_ids),
             "ranks": ranks,
-            "best_rank": int(ranks.min()),
-            "best_layer": int(ranks.argmin()),
+            "best_rank": int(ranks.min()) if ranks is not None else None,
+            "best_layer": int(ranks.argmin()) if ranks is not None else None,
         })
 
     # A tokenizer may emit BOS, multiple specials, or no specials at all.
@@ -441,15 +457,20 @@ def _readout_rows(
     kl = (log_probs[-1].exp() * (log_probs[-1] - log_probs)).sum(-1).mean(-1)
     input_ids = torch.tensor([ids[position] for position in positions], device=top1.device)
     model_top1 = int(readout[-1].argmax())
+    # Opt-in strict scoring uses exactly the target rank's accepted spellings.
+    target_ids = (
+        lookup(item["target"], expand if spelling_lookup is not None else False)
+        if "target" in item else set()
+    )
     item_row = {
         "dataset": dataset,
         "item": item["name"],
         "prompt": prompt,
         "target": item.get("target"),
-        "readout_token": tok.decode([ids[position]]),
-        "model_top1": tok.decode([model_top1]),
-        "model_correct": model_top1 in spelling_ids(tok, item["target"]) if "target" in item else None,
-        "readout_top1": [tok.decode([t]) for t in readout.argmax(-1).tolist()],
+        "readout_token": decode([ids[position]]),
+        "model_top1": decode([model_top1]),
+        "model_correct": model_top1 in target_ids if target_ids else None,
+        "readout_top1": [decode([t]) for t in readout.argmax(-1).tolist()],
         "agreement": (top1 == top1[-1]).float().mean(-1).cpu().numpy(),
         "copy_rate": (top1 == input_ids).float().mean(-1).cpu().numpy(),
         "kl_to_final": kl.cpu().numpy(),
@@ -476,6 +497,8 @@ def evaluate_paired(
     desc: str = "paired lenses",
     *,
     logit_readout: ActivationReadout = logit_lens_from_activations,
+    spelling_lookup: Callable[[str, bool], set[int]] | None = None,
+    preserve_prompt_whitespace: bool = False,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Evaluate logit lens and J-lens from one set of block outputs per prompt.
 
@@ -491,6 +514,12 @@ def evaluate_paired(
     Activations are released after each prompt, and only one lens's full
     logits tensor is kept at a time; dataset-wide vocabulary logits are not
     cached.
+
+    Optional ``spelling_lookup(word, expand)`` overrides lexical scoring for
+    both target ranks and correctness. Empty sets yield null ranks/correctness;
+    callers must report coverage and exclude null ranks from plotting helpers.
+    ``preserve_prompt_whitespace=True`` disables legacy prompt stripping.
+    Defaults retain the historical notebook protocol.
     """
     if lens.d_model != model.d_model:
         raise ValueError("lens d_model does not match the model")
@@ -501,7 +530,8 @@ def evaluate_paired(
     word_rows, item_rows = [], []
     for dataset, samples in tqdm(evals.items(), desc=desc):
         for i, item in enumerate(tqdm(samples, desc=dataset, leave=False)):
-            input_ids = model.encode(item["prompt"].rstrip())
+            prompt = item["prompt"] if preserve_prompt_whitespace else item["prompt"].rstrip()
+            input_ids = model.encode(prompt)
             ids = input_ids[0].tolist()
             with ActivationRecorder(model.layers, at=range(model.n_layers)) as recorder:
                 model.forward(input_ids)
@@ -523,7 +553,11 @@ def evaluate_paired(
                         del residual, transported
                     logits = torch.stack([*layer_logits, final_logits])
                     del layer_logits
-                rows, row = _readout_rows(model, logits, dataset, samples, i, ids)
+                rows, row = _readout_rows(
+                    model, logits, dataset, samples, i, ids,
+                    spelling_lookup=spelling_lookup,
+                    preserve_prompt_whitespace=preserve_prompt_whitespace,
+                )
                 word_rows.extend({**entry, "lens": name} for entry in rows)
                 item_rows.append({**row, "lens": name})
                 del logits
