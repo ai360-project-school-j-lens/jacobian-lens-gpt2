@@ -31,6 +31,12 @@ Unless a section says otherwise:
 
 An easier two-hop set for small models, in the `probe-swap` item format. 100 well-known landmarks in 20 countries fill one `template` ("The Eiffel Tower is in a country where the main language is"); the country (`intermediate`) never appears in the prompt and `answer` is its language from `languages` (one canonical word per country). Each landmark is paired with 4 `swap_to` countries with a different language, drawn with `random.Random(0)`: 400 items. All 20 country names are single GPT-2 tokens. Scoring as in `probe-swap`. `category` is the landmark's country; `landmark` is the unformatted landmark name.
 
+## latent-bridge-v2
+
+[`latent-bridge-v2.json`](latent-bridge-v2.json), built from [`latent-bridge-v2-candidates.json`](latent-bridge-v2-candidates.json) by `notebooks/jacobian_lens/latent_bridge_v2/latent_bridge_v2_build.ipynb`.
+
+`latent-bridge` with five subject families instead of landmarks only, filtered so that GPT-2 XL answers every item. The candidate file lists, per `family` (landmark, city, person, brand, food), a two-hop `template` ("Toyota is a company from a country where the main language is"), a `hop1_template` ("Toyota is a company based in the country of") and subjects by country; 530 subjects over 22 countries (the 20 of `latent-bridge` plus Sweden and Korea, all single GPT-2 tokens). A subject is kept when GPT-2 XL (fp32, `<|endoftext|>` as BOS) ranks its country first among the 22 on the hop-1 prompt, ranks the country's language first among the 19 languages on `hop2_template`, and greedily answers the two-hop prompt with a spelling of the language. 354 subjects pass; each gets 4 `swap_to` countries with a different language, drawn with `random.Random(0)`: 1416 items in the `latent-bridge` format plus `family` and `subject` (the unformatted subject, in place of `landmark`). `filtered_on` records the model and criteria; the set is model-specific, so refilter for another model.
+
 ## concept-probe-templates
 
 [`concept-probe-templates.json`](concept-probe-templates.json)
