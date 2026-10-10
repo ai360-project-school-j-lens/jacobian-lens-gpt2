@@ -267,7 +267,8 @@ def test_new_notebook_cells_run_offline_and_cache_generation(tiny_hf, tmp_path):
 
     hf, model = tiny_hf
     path = (Path(__file__).resolve().parents[1]
-            / "notebooks/jacobian_lens/pretrained_generated_answer_summary.ipynb")
+            / "notebooks/gemma-4-31b/jacobian_lens_pretrained"
+            / "pretrained_generated_answer_summary.ipynb")
     notebook = nbformat.read(path, as_version=4)
     nbformat.validate(notebook)
     for cell in notebook.cells:

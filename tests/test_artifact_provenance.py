@@ -16,9 +16,10 @@ from jlens.notebook_setup import DatasetFitRun
 
 ROOT = Path(__file__).resolve().parents[1]
 NOTEBOOKS = [
-    ROOT / "notebooks/jacobian_lens" / f"{name}.ipynb"
+    ROOT / "notebooks" / name
     for name in (
-        "model_agnostic_lens_dataset", "failed_gemma_model_agnostic_lens_dataset",
+        "model_agnostic/model_agnostic_lens_dataset.ipynb",
+        "gemma-4-31b/jacobian_lens/failed_gemma_model_agnostic_lens_dataset.ipynb",
     )
 ]
 COMMIT = "a" * 40

@@ -16,7 +16,7 @@ import jlens
 
 NOTEBOOK = (
     Path(__file__).resolve().parents[1]
-    / "notebooks/jacobian_lens/jacobian_logit_lens_dataset.ipynb"
+    / "notebooks/gpt2-xl/jacobian_lens/jacobian_logit_lens_dataset.ipynb"
 )
 CELLS = {cell.id: cell.source for cell in nbformat.read(NOTEBOOK, as_version=4).cells}
 

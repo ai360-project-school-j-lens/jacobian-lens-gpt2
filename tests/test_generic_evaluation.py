@@ -35,10 +35,11 @@ from jlens.evaluation import (
 )
 
 REPO = Path(__file__).resolve().parents[1]
-NOTEBOOK = REPO / "notebooks/jacobian_lens/model_agnostic_lens_dataset.ipynb"
+NOTEBOOK = REPO / "notebooks/model_agnostic/model_agnostic_lens_dataset.ipynb"
 NOTEBOOKS = [
     NOTEBOOK,
-    NOTEBOOK.with_name("failed_gemma_model_agnostic_lens_dataset.ipynb"),
+    REPO / "notebooks/gemma-4-31b/jacobian_lens"
+    / "failed_gemma_model_agnostic_lens_dataset.ipynb",
 ]
 
 

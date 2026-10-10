@@ -28,7 +28,7 @@ from gpt2.lens_eval import (
 from jlens.lens import JacobianLens
 
 REPO = Path(__file__).resolve().parents[1]
-NOTEBOOK = REPO / "notebooks/jacobian_lens/jacobian_logit_lens_dataset.ipynb"
+NOTEBOOK = REPO / "notebooks/gpt2-xl/jacobian_lens/jacobian_logit_lens_dataset.ipynb"
 
 
 class _AsciiTokenizer:
@@ -189,7 +189,7 @@ class TestPairedEvaluation(unittest.TestCase):
         evals["order-ops"][0]["target"] = "7"
         for path, start, imports in (
             (NOTEBOOK, "sanity_evals =", "import matplotlib"),
-            (REPO / "notebooks/logit_lens/logit_lens_dataset.ipynb",
+            (REPO / "notebooks/gpt2-xl/logit_lens/logit_lens_dataset.ipynb",
              "words, items =", "from functools import partial"),
         ):
             with self.subTest(notebook=path.name):
