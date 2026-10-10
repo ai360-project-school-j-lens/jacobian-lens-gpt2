@@ -325,3 +325,101 @@ def test_band_hooks_are_a_noop_when_the_position_slice_selects_nothing(make):
         patched = model.forward(single).last_hidden_state
     assert torch.isfinite(patched).all()
     assert torch.allclose(plain, patched, atol=1e-6)
+
+
+class _FakeTokenizer:
+    """Minimal vocabulary surface for :func:`jlens.evaluation.fuzzy_spelling_ids`.
+
+    The pieces mirror the Qwen behaviour this matcher exists for: ``Italy`` has spaced,
+    unspaced and upper-case single tokens; ``tellurium`` has none but a usable multi-letter
+    prefix; a numeral has none and ``" 26"`` begins with a bare space; ``火曜日`` starts with
+    a one-character non-ASCII token. ``encode`` is longest-match and returns ``[]`` when any
+    part of the text is unmatched, so a partial tokenization never looks single-token.
+    """
+
+    _PIECES = {
+        " Italy": 10, "Italy": 11, "ITALY": 12,
+        " tell": 20, "urium": 21,
+        " ": 30, "2": 32, "6": 33,
+        "火": 40, "曜日": 41,
+        " o": 50, "yster": 51,
+    }
+
+    def get_vocab(self):
+        return dict(self._PIECES)
+
+    def convert_tokens_to_string(self, tokens):
+        return "".join(tokens)
+
+    def decode(self, ids, **_kw):
+        lookup = {i: t for t, i in self._PIECES.items()}
+        return "".join(lookup[int(i)] for i in ids)
+
+    def encode(self, text, add_special_tokens=False):
+        pieces = sorted(self._PIECES.items(), key=lambda kv: -len(kv[0]))
+        out, rest = [], text
+        while rest:
+            for piece, token_id in pieces:
+                if rest.startswith(piece):
+                    out.append(token_id)
+                    rest = rest[len(piece):]
+                    break
+            else:
+                return []  # unmatched remainder: not a tokenization of this text
+        return out
+
+
+def test_fuzzy_exact_arm_unifies_spacing_and_case():
+    """' Italy', 'Italy' and 'ITALY' are one answer, not three."""
+    from jlens.evaluation import fuzzy_spelling_ids
+
+    assert fuzzy_spelling_ids(_FakeTokenizer(), "Italy") == {10, 11, 12}
+    assert fuzzy_spelling_ids(_FakeTokenizer(), " italy ") == {10, 11, 12}
+
+
+def test_fuzzy_exact_arm_is_a_superset_of_single_token_ids():
+    from jlens.evaluation import fuzzy_spelling_ids, single_token_ids
+
+    tokenizer = _FakeTokenizer()
+    for word in ("Italy", "26", "tellurium"):
+        assert single_token_ids(tokenizer, word) <= fuzzy_spelling_ids(tokenizer, word)
+
+
+def test_fuzzy_prefix_arm_rescues_multi_token_words():
+    from jlens.evaluation import fuzzy_spelling_ids
+
+    tokenizer = _FakeTokenizer()
+    assert fuzzy_spelling_ids(tokenizer, "tellurium") == {20}  # ' tell'
+    assert fuzzy_spelling_ids(tokenizer, "火曜日") == {40}  # one non-ASCII character is enough
+    assert fuzzy_spelling_ids(tokenizer, "oyster") == set()  # ' o' is one ASCII char: too weak
+
+
+def test_fuzzy_exact_arm_ignores_a_single_token_whitespace_variant():
+    """``single_token_ids`` can return a bare space when a lower-cased variant happens to
+    tokenize to one piece; the exact arm matches on decoded text, so it cannot."""
+    from jlens.evaluation import fuzzy_spelling_ids
+
+    assert all(
+        _FakeTokenizer().decode([i]).strip()
+        for i in fuzzy_spelling_ids(_FakeTokenizer(), "Italy")
+    )
+
+
+def test_fuzzy_refuses_a_whitespace_only_fallback():
+    """The bug this replaces: Qwen tokenizes ' 26' as ' '+'26', and
+    ``spelling_ids`` falls back to the bare space -- a very common next token that
+    scores as a hit whenever the continuation happens to be whitespace."""
+    from jlens.evaluation import fuzzy_spelling_ids, spelling_ids
+
+    tokenizer = _FakeTokenizer()
+    assert spelling_ids(tokenizer, "26") == {30}
+    assert tokenizer.decode([30]).strip() == ""
+    assert fuzzy_spelling_ids(tokenizer, "26") == set()
+
+
+def test_fuzzy_prefix_can_be_disabled():
+    from jlens.evaluation import fuzzy_spelling_ids
+
+    tokenizer = _FakeTokenizer()
+    assert fuzzy_spelling_ids(tokenizer, "tellurium", prefix=False) == set()
+    assert fuzzy_spelling_ids(tokenizer, "Italy", prefix=False) == {10, 11, 12}

@@ -128,6 +128,37 @@ def plot_intermediate_sweep(sweep: IntermediateSweep) -> tuple[Figure, np.ndarra
     return fig, axes
 
 
+def plot_intermediate_auc(
+    sweep: IntermediateSweep, *, datasets: Sequence[str] = PANEL_DATASETS,
+) -> tuple[Figure, Axes]:
+    """Compare the sweep's normalized log-k AUC by dataset; missing stays N/A."""
+    auc = sweep.scores[["dataset", "lens", "auc"]].drop_duplicates()
+    values = auc.pivot(index="dataset", columns="lens", values="auc").reindex(
+        index=list(datasets), columns=list(LENS_NAMES),
+    )
+    fig, ax = plt.subplots(figsize=(10, 4.5))
+    x = np.arange(len(values))
+    width = 0.38
+    for index, (name, color) in enumerate(zip(LENS_NAMES, ("black", "red"), strict=True)):
+        positions = x + (index - 0.5) * width
+        ax.bar(positions, values[name], width, label=name, color=color)
+        for position, value in zip(positions, values[name], strict=True):
+            ax.text(position, 0.02 if pd.isna(value) else value + 0.015,
+                    "N/A" if pd.isna(value) else f"{value:.3f}",
+                    ha="center", va="bottom", fontsize=8)
+    ks = sorted(sweep.scores["k"].unique())
+    interval = f" (k={ks[0]}–{ks[-1]})" if ks else ""
+    ax.set_xticks(x, values.index, rotation=25, ha="right")
+    ax.set(xlim=(-0.6, max(len(values), 1) - 0.4), ylim=(0, 1.08),
+           ylabel="Normalized AUC over log(k)",
+           title="Intermediate pass@k AUC by dataset" + interval
+           + "\nBest over all layers, including shared model output")
+    ax.grid(axis="y", alpha=0.2)
+    ax.legend()
+    fig.tight_layout()
+    return fig, ax
+
+
 def normalized_depth(layers: Sequence[int], n_layers: int) -> np.ndarray:
     """Map actual block indices to 0..100; never rescale a selected subset.
 

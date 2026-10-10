@@ -407,6 +407,77 @@ def single_token_ids(tokenizer, word: str, expand: bool = False) -> set[int]:
     return ids
 
 
+_FUZZY_FORMS: dict[int, dict[str, set[int]]] = {}
+
+
+def _forms_by_text(tokenizer) -> dict[str, set[int]]:
+    """Vocabulary index: stripped, case-folded decoded text -> every id with that text.
+
+    Built by scanning the whole vocabulary once per tokenizer, so it finds spellings
+    :func:`single_token_ids` cannot construct (odd casings, byte-level variants, scripts
+    where the leading-space form is not a simple concatenation). Cached by tokenizer id.
+    """
+    key = id(tokenizer)
+    if key not in _FUZZY_FORMS:
+        index: dict[str, set[int]] = {}
+        for token, token_id in tokenizer.get_vocab().items():
+            text = tokenizer.convert_tokens_to_string([token]).strip().casefold()
+            if text:
+                index.setdefault(text, set()).add(token_id)
+        _FUZZY_FORMS[key] = index
+    return _FUZZY_FORMS[key]
+
+
+def fuzzy_spelling_ids(
+    tokenizer, word: str, expand: bool = False, *, prefix: bool = True
+) -> set[int]:
+    """Token ids that count as the model saying ``word``, matched leniently.
+
+    Three arms, in order:
+
+    1. **Exact.** Every vocabulary token whose decoded text equals ``word`` ignoring
+       surrounding whitespace and case. This is what makes ``' Italy'`` and ``'Italy'``
+       one answer rather than two, and it is a superset of :func:`single_token_ids`.
+    2. **Prefix** (only when the exact arm is empty, i.e. ``word`` has no single-token
+       form, and only when ``prefix`` is True). The first token of the word's own
+       tokenization, accepted when it decodes to a non-whitespace prefix of ``word`` of
+       at least two characters -- or one character if that character is non-ASCII, since
+       a CJK token carries far more of the word than a Latin letter does. This is what
+       makes ``tellurium``, ``automne`` and ``火曜日`` scorable at all.
+    3. **Unscorable.** Otherwise the empty set, which :func:`_readout_rows` records as
+       ``ranks=None`` so the word is *excluded* rather than scored. Qwen tokenizes a
+       numeral like ``26`` as ``2``+``6`` and ``" 26"`` as ``" "``+``"26"``, so
+       :func:`spelling_ids` would fall back to a bare space -- an extremely common next
+       token, which scores as a hit on any prompt that happens to continue with
+       whitespace.
+
+    The prefix arm raises absolute hit rates for every lens, because a word's first
+    token is more probable than the whole word. It is applied identically to both
+    lenses, so lens-vs-lens contrasts stay fair, but absolute numbers are not comparable
+    to a strict run. Pass ``prefix=False`` for the exact arm alone.
+    """
+    spellings = synonyms(word) if expand else [str(word)]
+    index = _forms_by_text(tokenizer)
+    ids: set[int] = set()
+    for spelling in spellings:
+        ids |= index.get(str(spelling).strip().casefold(), set())
+    if ids or not prefix:
+        return ids
+    for spelling in spellings:
+        text = str(spelling).strip()
+        if not text:
+            continue
+        for candidate in (" " + text, text):
+            tokens = tokenizer.encode(candidate, add_special_tokens=False)
+            if not tokens:
+                continue
+            piece = tokenizer.decode([tokens[0]]).strip()
+            enough = len(piece) >= 2 or (len(piece) == 1 and not piece.isascii())
+            if piece and enough and text.casefold().startswith(piece.casefold()):
+                return {tokens[0]}
+    return set()
+
+
 def spelling_ids(tokenizer, word: str, expand: bool = False) -> set[int]:
     """:func:`single_token_ids`, or the first token of " word" if there are none."""
     # слово не помещается в один токен — берём первый токен варианта с пробелом

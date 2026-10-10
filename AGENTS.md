@@ -4,7 +4,7 @@
 
 - `jlens/` contains the architecture-independent `LensModel` protocol, HuggingFace adapters, activation hooks, Jacobian fitting, evaluation, the readout-position cache (`readout_cache.py`), sharded fitting, and visualization.
 - `gpt2/` provides the GPT-2 adapter and handwritten lens functions; `lens_eval.py` re-exports shared evaluation helpers.
-- `notebooks/` groups walkthroughs, logit-lens examples, dataset comparisons, and experiments by lens. Use `notebooks/jacobian_lens/model_agnostic_lens_dataset.ipynb` for multi-model experiments.
+- `notebooks/` groups walkthroughs, logit-lens examples, dataset comparisons, and experiments by lens; model-specific studies live in a per-model folder (`notebooks/qwen-9B/` for Qwen3.5-9B, strict and translated scoring). Use `notebooks/jacobian_lens/model_agnostic_lens_dataset.ipynb` for multi-model experiments.
 - `tests/` contains offline tests and the small decoder fixture in `tiny.py`.
 - `data/evaluations/` and `data/experiments/` hold JSON prompt sets and protocol documentation; `assets/` holds visualization resources.
 
@@ -41,7 +41,7 @@ Keep weights, `.pt` checkpoints, credentials, and downloaded corpora out of comm
 
 ## Experiments
 
-Deliver experiments as notebooks in `notebooks/<lens>/`, not as a separate README plus standalone scripts. Keep executed outputs (tables and plots) in committed notebooks so results are readable without rerunning. State the question and the answer at the top, describe the method, and end with conclusions. Cache expensive steps (fits, model passes) to files and skip them when the cache exists, so a notebook can be re-executed cheaply; keep the cached artifacts out of commits.
+Deliver experiments as notebooks in `notebooks/<lens>/` (or a per-model folder such as `notebooks/qwen-9B/`), not as a separate README plus standalone scripts. Keep executed outputs (tables and plots) in committed notebooks so results are readable without rerunning. State the question and the answer at the top, describe the method, and end with conclusions. Cache expensive steps (fits, model passes) to files and skip them when the cache exists, so a notebook can be re-executed cheaply; keep the cached artifacts out of commits.
 
 ## Other notes
 

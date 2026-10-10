@@ -33,13 +33,14 @@ held-out corpus matches a pretraining distribution.
 
 ```python
 from jlens.reference_plots import (
-    intermediate_rank_sweep, plot_intermediate_sweep,
+    intermediate_rank_sweep, plot_intermediate_sweep, plot_intermediate_auc,
     plot_distribution_summary, plot_lens_comparison,
 )
 
 sweep = intermediate_rank_sweep(words)
 print(sweep.counts)
 fig52, axes52 = plot_intermediate_sweep(sweep)
+fig_auc, ax_auc = plot_intermediate_auc(sweep)
 # metrics/geometry are generated explicitly using jlens.metrics; see lens_metrics.md.
 fig55, axes55 = plot_distribution_summary(metrics.layers, n_layers=model.n_layers)
 fig56, axes56 = plot_lens_comparison(metrics.pairs, geometry, n_layers=model.n_layers)
@@ -69,6 +70,12 @@ load a model or access a corpus.
   lens. Missing data is labeled, not silently plotted as zero.
 - `IntermediateSweep.scores`: dataset, lens, k, score, auc.
   `.counts`: dataset, lens, n_words_total/used/excluded, n_items_total/used/excluded.
+- `plot_intermediate_auc` compares these same AUCs as grouped bars per dataset,
+  with missing support labeled N/A. The generated-answer summary notebook shows
+  the chart alongside coverage counts. All items and blocks are included, as in
+  the curves. AUC reduces dependence on a single rank cutoff; it does not
+  estimate uncertainty across stochastic runs or measure sampled-completion
+  pass@k. Compare only curves using the same k grid and range.
 
 ### Figures 55/56
 
