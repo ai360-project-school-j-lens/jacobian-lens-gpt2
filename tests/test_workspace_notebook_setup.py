@@ -1,5 +1,6 @@
 """Offline bootstrap and prefitted-loading checks for the workspace notebook."""
 
+import importlib.metadata
 import subprocess
 import sys
 from pathlib import Path
@@ -83,6 +84,7 @@ def _checkout(path, *, current=True):
     (path / "jlens/evaluation.py").touch()
     if current:
         (path / "jlens/workspace_layers.py").touch()
+        (path / "jlens/workspace_plotting.py").touch()
 
 
 @pytest.mark.parametrize("colab_marker", ["environment", "module"])
@@ -148,6 +150,19 @@ def test_stale_checkout_stops_before_install(tmp_path, monkeypatch):
     with pytest.raises(RuntimeError, match="pull --ff-only"):
         exec(_setup_source(), {})
     runner.assert_not_called()
+
+
+def test_setup_detects_matplotlib_upgrade_before_model_loading(tmp_path, monkeypatch):
+    _checkout(tmp_path / "jacobian-lens-gpt2")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("COLAB_RELEASE_TAG", "offline-test")
+    monkeypatch.setitem(sys.modules, "matplotlib", SimpleNamespace(__version__="3.10.9"))
+    monkeypatch.setattr(importlib.metadata, "version", lambda package: "3.11.2")
+    runner = Mock()
+    monkeypatch.setattr(subprocess, "run", runner)
+    with pytest.raises(RuntimeError, match="Restart the Colab"):
+        exec(_setup_source(), {})
+    runner.assert_called_once()  # Install completes, then the stale kernel stops.
 
 
 @pytest.mark.parametrize(
