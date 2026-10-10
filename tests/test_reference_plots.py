@@ -16,6 +16,7 @@ from jlens.reference_plots import (
     intermediate_rank_sweep,
     normalized_depth,
     plot_distribution_summary,
+    plot_intermediate_auc,
     plot_intermediate_sweep,
     plot_lens_comparison,
     same_layer_pairs,
@@ -72,6 +73,24 @@ def test_auc_integrates_log_k_not_linear_k():
     sweep = intermediate_rank_sweep(words, ks=[1, 10, 100])
     assert sweep.scores.score.tolist() == [0, 1, 1]
     np.testing.assert_allclose(sweep.scores.auc, 0.75)
+
+
+def test_auc_bars_match_sweep_and_keep_missing_datasets_unavailable():
+    words = word_frame()
+    words.loc[words.lens.eq("logit lens"), "single_token"] = False
+    sweep = intermediate_rank_sweep(words)
+    before = sweep.scores.copy(deep=True)
+    datasets = ["order-ops", "multihop", "absent"]
+    _, ax = plot_intermediate_auc(sweep, datasets=datasets)
+    np.testing.assert_allclose(
+        [bar.get_height() for bar in ax.containers[0]], [2 / 3, 2 / 3, np.nan],
+    )
+    assert all(np.isnan(bar.get_height()) for bar in ax.containers[1])
+    assert [label.get_text() for label in ax.get_xticklabels()] == datasets
+    assert sum(text.get_text() == "N/A" for text in ax.texts) == 4
+    pd.testing.assert_frame_equal(sweep.scores, before)
+    _, empty_ax = plot_intermediate_auc(intermediate_rank_sweep(words.iloc[:0]))
+    assert all(text.get_text() == "N/A" for text in empty_ax.texts)
 
 
 @pytest.mark.parametrize("ks", [[1], [1, 1], [2, 1], [0, 1], [1, 1.5], [1, np.nan]])

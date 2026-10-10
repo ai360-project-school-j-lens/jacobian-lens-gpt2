@@ -21,6 +21,12 @@ from jlens.generated_answers import (
     greedy_generation_config,
     score_answer,
     score_generations,
+    validate_hf_readout,
+)
+from jlens.reference_plots import (
+    intermediate_rank_sweep,
+    plot_intermediate_auc,
+    plot_intermediate_sweep,
 )
 from jlens.strict_scoring import ExplicitPromptModel
 from jlens.summaries import retrieval_summary
@@ -52,10 +58,41 @@ from jlens.summaries import retrieval_summary
     ("Atlantic Ocean.", "Atlantic", "multihop", False),
     ("six.", "seis", "multilingual", False),
     ("\n\t", "14", "order-ops", False),
+    ("<strong>Atlantic</strong> Ocean", "Atlantic", "multihop", True),
+    ("Answer: <strong>14</strong>", "fourteen", "order-ops", True),
+    ('<p><span class="answer">Fourteen</span></p>', "14", "order-ops", True),
+    ("<strong>Pacific</strong> Atlantic", "Atlantic", "multihop", False),
+    ("<unused5>Atlantic", "Atlantic", "multihop", False),
+    ("**Atlantic** is an ocean", "Atlantic", "multihop", True),
 ])
 def test_complete_answer_scoring(text, target, dataset, expected):
     result = score_answer(text, target, dataset=dataset)
     assert result["answer_correct"] is expected
+
+
+@pytest.mark.parametrize("text,target,truncated,status", [
+    ("2 * 7 = 14", "14", False, "match"),
+    ("2 * 7 = 14. Unfinished explanation", "fourteen", True, "match"),
+    ("2 * (3 + 4) = 2 * 7 = 14\n", "14", True, "match"),
+    ("2 × 7 = fourteen.", "14", False, "match"),
+    ("28 ÷ 2 = 14.0.", "14", False, "match"),
+    ("−2 * 7 = -14.", "-14", False, "match"),
+    ("2 * 7 = 28/2.", "14", False, "match"),
+    ("2 * 7 = 15. Actually 14.", "14", False, "wrong_answer"),
+    ("2 * 7 = 14", "14", True, "truncated_answer"),
+    ("2 * 7 = 1", "14", True, "truncated_answer"),
+    ("2 * 7 =", "14", False, "unparsed_numeric_answer"),
+    ("2 * = 14", "14", False, "unparsed_numeric_answer"),
+    ("2 * 7 == 14", "14", False, "unparsed_numeric_answer"),
+    ("Guess 15 then = 14", "14", False, "unparsed_numeric_answer"),
+    ("f(2) = 14", "14", False, "unparsed_numeric_answer"),
+    ("True = 14", "14", False, "unparsed_numeric_answer"),
+    ("2 * 7 = 14 or 15", "14", False, "unparsed_numeric_answer"),
+])
+def test_completed_arithmetic_equation_answers(text, target, truncated, status):
+    result = score_answer(text, target, dataset="order-ops", truncated=truncated)
+    assert result["answer_status"] == status
+    assert result["answer_correct"] is (status == "match")
 
 
 def test_aliases_and_truncated_fragments():
@@ -67,6 +104,10 @@ def test_aliases_and_truncated_fragments():
         assert result["answer_status"] == "truncated_answer"
     assert score_answer("14. More unfinished", "14", dataset="order-ops",
                         truncated=True)["answer_correct"]
+    assert score_answer("<strong>14</strong> unfinished", "14", dataset="order-ops",
+                        truncated=True)["answer_correct"]
+    assert not score_answer("<strong>14", "14", dataset="order-ops",
+                            truncated=True)["answer_correct"]
     with pytest.raises(ValueError, match="sequence"):
         score_answer("Atlantic", "Atlantic", dataset="multihop", aliases="Ocean")
 
@@ -107,6 +148,20 @@ def tiny_hf():
 
 def sample(name, prompt, target="14"):
     return dict(name=name, prompt=prompt, target=target, intermediates=["a"])
+
+
+def test_native_readout_check_uses_real_positions_and_catches_adapter_errors(tiny_hf):
+    hf, model = tiny_hf
+    with patch.object(hf, "forward", wraps=hf.forward) as forward:
+        result = validate_hf_readout(hf, model, ["a", "abcdef "])
+        assert forward.call_count == 1
+        assert forward.call_args.kwargs["input_ids"].shape == (2, 8)
+    assert result.readout_token.tolist() == [repr("a"), repr(" ")]
+    assert result.top1_agrees.all()
+    unembed = model.unembed
+    with patch.object(model, "unembed", side_effect=lambda h: unembed(h) + 5):
+        with pytest.raises(AssertionError):
+            validate_hf_readout(hf, model, ["a", "abcdef "])
 
 
 def test_real_left_padded_generation_matches_unpadded_reference(tiny_hf):
@@ -247,9 +302,13 @@ def test_new_notebook_cells_run_offline_and_cache_generation(tiny_hf, tmp_path):
         generate_answers_batched=generate_answers_batched,
         greedy_generation_config=greedy_generation_config,
         score_generations=score_generations, generated_answer_counts=generated_answer_counts,
+        validate_hf_readout=validate_hf_readout,
         SCORING_VERSION=SCORING_VERSION, answer_counts=answer_counts,
         retrieval_summary=retrieval_summary, plot_retrieval_summary=plot_retrieval_summary,
         target_final_counts=target_final_counts,
+        intermediate_rank_sweep=intermediate_rank_sweep,
+        plot_intermediate_sweep=plot_intermediate_sweep,
+        plot_intermediate_auc=plot_intermediate_auc,
     )
     # Run task, token summary, generation, scoring and both retrieval sections.
     sources = [cell.source for cell in notebook.cells if cell.cell_type == "code"]
@@ -258,8 +317,7 @@ def test_new_notebook_cells_run_offline_and_cache_generation(tiny_hf, tmp_path):
     ))]
     with patch.object(plt, "show"), patch.object(hf, "generate", wraps=hf.generate) as generate:
         for source in selected:
-            if "intermediate_rank_sweep" not in source:
-                exec(source, ns)
+            exec(source, ns)
         count = generate.call_count
         assert count == 2
         generation_cell = next(s for s in selected if "generations = cached(" in s)
@@ -276,4 +334,5 @@ def test_new_notebook_cells_run_offline_and_cache_generation(tiny_hf, tmp_path):
         with pytest.raises(RuntimeError, match="stale"):
             exec(score_cell, ns)
     assert "next_token_target_match" in ns["items"]
+    assert set(ns["sweep_auc"].dataset) == set(datasets)
     plt.close("all")

@@ -6,6 +6,7 @@ scoring so aliases and extraction rules can change without another model pass.
 
 from __future__ import annotations
 
+import ast
 import re
 import unicodedata
 from collections.abc import Mapping, Sequence
@@ -17,9 +18,10 @@ from tqdm.auto import tqdm
 from transformers import GenerationConfig
 
 from jlens.evaluation import synonyms
+from jlens.hooks import ActivationRecorder
 from jlens.strict_scoring import ExplicitPromptModel
 
-SCORING_VERSION = "first-complete-phrase-v1"
+SCORING_VERSION = "first-complete-phrase-v3"
 _KEYS = ["dataset", "item"]
 _GENERATION_COLUMNS = [
     *_KEYS, "prompt", "target", "generated_text", "generated_text_raw",
@@ -27,7 +29,12 @@ _GENERATION_COLUMNS = [
 ]
 # A decimal point inside a number is not a sentence boundary. Apostrophes
 # inside words remain intact. This deliberately does not search later answers.
-_BOUNDARY = re.compile(r"[\n\r;:!?。！？；，\"”»]|,(?!\d)|(?<!\w)'|\.(?!\d)")
+_FORMAT_TAGS = r"(?:strong|b|em|i|span|p|div|code)"
+_HTML_OPEN = re.compile(r"^<" + _FORMAT_TAGS + r"(?:\s+[^<>]*)?>", re.I)
+_BOUNDARY = re.compile(
+    r"</" + _FORMAT_TAGS + r"\s*>|\*\*|[\n\r;:!?。！？；，\"”»]|,(?!\d)|(?<!\w)'|\.(?!\d)",
+    re.I,
+)
 _PREFIX = re.compile(r"^(?:the answer is|answer is|answer\s*:|=)\s*", re.I)
 _NUMERIC = re.compile(r"[+-]?(?:\d+(?:\.\d+)?|\d+/\d+)\Z")
 _NUMBER_WORDS = {
@@ -55,6 +62,31 @@ def _number(text: str) -> Fraction | None:
     return None if value is None else Fraction(sign * value)
 
 
+def _numeric_answer(text: str) -> Fraction | None:
+    """Read a literal or the final RHS of a syntactic arithmetic equality.
+
+    Only numeric arithmetic is allowed before '='; prose, calls, comparisons,
+    and arbitrary earlier mentions cannot supply an answer. Expressions are
+    never evaluated: this scores the stated answer, not the working.
+    """
+    parts = text.replace("−", "-").replace("×", "*").replace("÷", "/").split("=")
+    for expression in parts[:-1]:
+        try:
+            tree = ast.parse(expression.strip(), mode="eval")
+        except (SyntaxError, ValueError, RecursionError):
+            return None
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Constant):
+                if type(node.value) not in (int, float):
+                    return None
+            elif not isinstance(node, (
+                ast.Expression, ast.BinOp, ast.UnaryOp,
+                ast.Add, ast.Sub, ast.Mult, ast.Div, ast.UAdd, ast.USub,
+            )):
+                return None
+    return _number(parts[-1])
+
+
 def score_answer(
     continuation: str,
     target: str,
@@ -65,18 +97,25 @@ def score_answer(
 ) -> dict:
     """Compare the first completed phrase, never a fragment or later mention.
 
-    Strip leading whitespace/quotes/backticks/asterisks and an optional English
+    Strip leading whitespace/quotes/backticks/asterisks, common HTML formatting
+    tags (strong, b, em, i, span, p, div, code), and an optional English
     answer prefix. The first sentence/line/quote/clause boundary ends the answer.
     Without a boundary, the end of an EOS-terminated continuation ends it;
     a token-limit-truncated phrase is rejected. Numeric targets and order-ops
-    accept equivalent digits, decimals, fractions, and English integers 0..99.
+    accept equivalent digits, decimals, fractions, and English integers 0..99,
+    including the final numeric RHS of an arithmetic equality (2 * 7 = 14).
+    The equality must fit within the first completed phrase; working is not graded.
     Other answers require exact normalized equality or an explicit alias.
     Unparsed/truncated answers count as misses, with reasons for manual review.
     """
     if isinstance(aliases, str) or any(not isinstance(a, str) for a in aliases):
         raise ValueError("aliases must be a sequence of complete answer strings")
     text = continuation.lstrip(" \t\r\n\"'“‘«`*")
+    while opening := _HTML_OPEN.match(text):
+        text = text[opening.end():].lstrip(" \t\r\n\"'“‘«`*")
     text = _PREFIX.sub("", text, count=1).lstrip(" \t\"'“‘«`*")
+    while opening := _HTML_OPEN.match(text):
+        text = text[opening.end():].lstrip(" \t\r\n\"'“‘«`*")
     boundary = _BOUNDARY.search(text)
     answer = (text[:boundary.start()] if boundary else text).strip().rstrip("`*’'")
     normalized = normalize_answer(answer)
@@ -88,7 +127,7 @@ def score_answer(
         accepted = [target, *aliases]
         numeric = dataset == "order-ops" or bool(_NUMERIC.fullmatch(target.strip()))
         if numeric:
-            value = _number(answer)
+            value = _numeric_answer(answer)
             values = {_number(word) for word in accepted} - {None}
             correct = value is not None and value in values
             status = "match" if correct else (
@@ -123,6 +162,58 @@ def greedy_generation_config(hf_model, tokenizer, *, max_new_tokens: int) -> Gen
         num_return_sequences=1, use_cache=True, repetition_penalty=1.0,
         bos_token_id=tokenizer.bos_token_id, eos_token_id=eos, pad_token_id=pad,
     )
+
+
+@torch.inference_mode()
+def validate_hf_readout(
+    hf_model, model: ExplicitPromptModel, prompts: Sequence[str], *,
+    max_seq_len: int = 512,
+) -> pd.DataFrame:
+    """Check the adapter against native HF logits in two masked batch passes.
+
+    Right-pad and read each row at its last real token. This checks the raw
+    decoder path and final normalization/head, independently of lens transport.
+    Dtype-aware tolerances allow rounding from different head matrix shapes.
+    Raises on numerical disagreement; returned token spellings use repr so BOS
+    and whitespace remain visible. Does not validate pretrained lens fitting.
+    """
+    if not prompts or hf_model.training:
+        raise ValueError("Supply prompts and an eval-mode HF model")
+    encoded = [model.encode_ids(p, max_length=max_seq_len) for p in prompts]
+    pad = model.tokenizer.pad_token_id
+    if pad is None:
+        pad = encoded[0][0]
+    ids = torch.full((len(encoded), max(map(len, encoded))), pad, dtype=torch.long)
+    mask = torch.zeros_like(ids)
+    for row, tokens in enumerate(encoded):
+        ids[row, :len(tokens)] = torch.tensor(tokens)
+        mask[row, :len(tokens)] = 1
+    ids, mask = ids.to(model.input_device), mask.to(model.input_device)
+    rows = torch.arange(len(encoded), device=model.input_device)
+    last = mask.sum(-1) - 1
+    with ActivationRecorder(model.layers, at=[model.n_layers - 1]) as recorder:
+        model.forward(ids, attention_mask=mask)
+    residual = recorder.activations[model.n_layers - 1]
+    actual = model.unembed(residual[rows.to(residual.device), last.to(residual.device)])
+    del recorder, residual
+    native = hf_model(input_ids=ids, attention_mask=mask, use_cache=False).logits
+    expected = native[rows.to(native.device), last.to(native.device)]
+    atol = {torch.bfloat16: 0.25, torch.float16: 0.02}.get(expected.dtype, 2e-4)
+    rtol = 0.02 if expected.dtype in (torch.bfloat16, torch.float16) else 2e-4
+    torch.testing.assert_close(actual.float(), expected.float(), atol=atol, rtol=rtol)
+    actual_top = actual.argmax(-1).cpu().tolist()
+    expected_top = expected.argmax(-1).cpu().tolist()
+    errors = (actual.float() - expected.float()).abs().amax(-1).cpu().tolist()
+    return pd.DataFrame([
+        dict(prompt=repr(prompt), first_token=repr(model.tokenizer.decode(tokens[:1])),
+             readout_token=repr(model.tokenizer.decode(tokens[-1:])),
+             adapter_top1=repr(model.tokenizer.decode([a])),
+             native_top1=repr(model.tokenizer.decode([b])),
+             top1_agrees=a == b, max_abs_error=error, atol=atol, rtol=rtol)
+        for prompt, tokens, a, b, error in zip(
+            prompts, encoded, actual_top, expected_top, errors, strict=True,
+        )
+    ])
 
 
 @torch.inference_mode()
