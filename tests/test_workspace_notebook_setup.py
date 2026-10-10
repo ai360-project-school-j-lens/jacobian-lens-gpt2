@@ -10,6 +10,7 @@ from unittest.mock import Mock
 import nbformat
 import pytest
 import torch
+from huggingface_hub import HfApi
 
 import jlens
 from jlens.evaluation import identity_lens
@@ -23,7 +24,7 @@ NOTEBOOK = (
 
 @pytest.mark.parametrize("source", ["hub", "local"])
 @pytest.mark.parametrize("failure", [None, "download", "width", "coverage", "nonfinite"])
-def test_prefitted_notebook_never_fits(tmp_path, source, failure):
+def test_prefitted_notebook_never_fits(tmp_path, monkeypatch, source, failure):
     if source == "local" and failure == "download":
         pytest.skip("Local loading makes no download request")
     model = TinyDecoder(n_layers=3)
@@ -36,17 +37,18 @@ def test_prefitted_notebook_never_fits(tmp_path, source, failure):
         lens.jacobians[0][0, 0] = torch.nan
     path = tmp_path / "matching-final.pt"
     lens.save(str(path))
-    receipt = dict(resolved_revision="a" * 40, fitting_provenance="external")
-    download = Mock(return_value=SimpleNamespace(path=str(path), to_dict=lambda: receipt))
+    download = Mock(return_value=str(path))
     if failure == "download":
         download.side_effect = OSError("Network unavailable")
     forbidden = Mock(side_effect=AssertionError("Prefitted loading must not enter fitting"))
+    metadata = Mock(side_effect=AssertionError("Lens loading must not require LFS metadata"))
+    monkeypatch.setattr(HfApi, "model_info", metadata)
     namespace = dict(
         Path=Path, torch=torch, jlens=jlens, model=model,
         RUN_MODE="hf", LENS_SOURCE=source,
         EXISTING_LENS_PATH=path,
         HUB_LENS=dict(repo_id="offline/lenses", filename="matching-final.pt", revision="main"),
-        download_lens_artifact=download, display=Mock(),
+        hf_hub_download=download, display=Mock(),
         DatasetFitRun=forbidden, fit_with_progress=forbidden,
         fit_prompt_loader=forbidden, benchmark_dim_batches=forbidden,
         fitted_lens="stale lens", readouts="stale readouts", geometry="stale geometry",
@@ -63,11 +65,13 @@ def test_prefitted_notebook_never_fits(tmp_path, source, failure):
         assert namespace["lens_path"] == path
         assert namespace["lens_provenance"]["source"] == source
         if source == "hub":
-            assert namespace["lens_provenance"]["resolved_revision"] == "a" * 40
+            assert namespace["lens_provenance"]["repo_id"] == "offline/lenses"
+            assert namespace["lens_provenance"]["filename"] == "matching-final.pt"
     assert namespace["readouts"] is None
     assert namespace["geometry"] is None
     assert namespace["fit_run"] is None
     forbidden.assert_not_called()
+    metadata.assert_not_called()
     if source == "local":
         download.assert_not_called()
     else:
@@ -178,9 +182,16 @@ def test_configuration_selects_supported_colab_dtype(tmp_path, cuda, bf16, expec
         cuda=SimpleNamespace(is_available=lambda: cuda, is_bf16_supported=native_bf16),
         float32="float32", float16="float16", bfloat16="bfloat16",
     )
-    namespace = dict(torch=fake_torch, Path=Path, REPO_DIR=tmp_path)
+    namespace = dict(torch=fake_torch, Path=Path, REPO_DIR=tmp_path,
+                     os=SimpleNamespace(environ={}))
     exec(config, namespace)
+    assert namespace["RUN_MODE"] == "hf"
     assert namespace["DTYPE"] == expected
+    assert namespace["MODEL_ID"] == "Qwen/Qwen3.5-9B"
+    assert namespace["HUB_LENS"] == dict(
+        repo_id="bcywinski/jacobian-lens-qwen3.5-9b",
+        filename="lens_n1000.pt", revision="main",
+    )
     if cuda:
         native_bf16.assert_called_once_with(including_emulation=False)
     else:
