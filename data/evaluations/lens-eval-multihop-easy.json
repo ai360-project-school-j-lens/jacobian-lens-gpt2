@@ -1,0 +1,3217 @@
+{
+  "metadata": {
+    "version": 1,
+    "status": "unfiltered_candidates",
+    "purpose": "Compare J-Lens and logit-lens ranks of unspoken intermediates",
+    "readout_position": "last_prompt_token",
+    "model_validation": "not_run",
+    "lens_selection": "none",
+    "n_base_items": 100,
+    "n_prompts": 200,
+    "shuffle_seed": 17,
+    "split_rule": "Per family, sort unique casefolded bridges by sha256('17:' + bridge); first max(1, round(n / 5)) enter dev; union dev groups across families",
+    "builder": "notebooks/model_agnostic/multihop_easy/multihop_easy_build.ipynb"
+  },
+  "items": [
+    {
+      "name": "bee-food-v2",
+      "prompt": "The food obtained from the striped flying insect that lives in a hive is",
+      "target": "honey",
+      "intermediates": [
+        "bee"
+      ],
+      "base_id": "bee-food",
+      "family": "animals",
+      "relation": "animal_food",
+      "template_id": 2,
+      "group_id": "bee",
+      "split": "test",
+      "hop1_prompt": "The name of the striped flying insect that lives in a hive is",
+      "hop2_prompt": "The food produced by the bee is"
+    },
+    {
+      "name": "sweden-country_continent-v1",
+      "prompt": "The continent containing the country whose capital is Stockholm is",
+      "target": "Europe",
+      "intermediates": [
+        "Sweden"
+      ],
+      "base_id": "sweden-country_continent",
+      "family": "geography",
+      "relation": "country_continent",
+      "template_id": 1,
+      "group_id": "sweden",
+      "split": "dev",
+      "hop1_prompt": "The country whose capital is Stockholm is",
+      "hop2_prompt": "The continent containing Sweden is"
+    },
+    {
+      "name": "dog-legs-v1",
+      "prompt": "The number of legs on the domestic animal that barks is",
+      "target": "4",
+      "intermediates": [
+        "dog"
+      ],
+      "base_id": "dog-legs",
+      "family": "animals",
+      "relation": "animal_legs",
+      "template_id": 1,
+      "group_id": "dog",
+      "split": "test",
+      "hop1_prompt": "The name of the domestic animal that barks is",
+      "hop2_prompt": "The number of legs on the dog is"
+    },
+    {
+      "name": "greece-country_language-v1",
+      "prompt": "The most widely spoken language of the country whose capital is Athens is",
+      "target": "Greek",
+      "intermediates": [
+        "Greece"
+      ],
+      "base_id": "greece-country_language",
+      "family": "geography",
+      "relation": "country_language",
+      "template_id": 1,
+      "group_id": "greece",
+      "split": "test",
+      "hop1_prompt": "The country whose capital is Athens is",
+      "hop2_prompt": "The most widely spoken language in Greece is"
+    },
+    {
+      "name": "knife-plural-v1",
+      "prompt": "The plural of the noun meaning the sharp utensil used to slice bread is",
+      "target": "knives",
+      "intermediates": [
+        "knife"
+      ],
+      "base_id": "knife-plural",
+      "family": "word_forms",
+      "relation": "description_plural",
+      "template_id": 1,
+      "group_id": "knife",
+      "split": "test",
+      "hop1_prompt": "The singular noun meaning the sharp utensil used to slice bread is",
+      "hop2_prompt": "The plural of knife is"
+    },
+    {
+      "name": "bottle-opposite-v1",
+      "prompt": "The opposite of the adjective describing a bottle with nothing inside is",
+      "target": "full",
+      "intermediates": [
+        "empty"
+      ],
+      "base_id": "bottle-opposite",
+      "family": "opposites",
+      "relation": "property_antonym",
+      "template_id": 1,
+      "group_id": "empty",
+      "split": "test",
+      "hop1_prompt": "The adjective describing a bottle with nothing inside is",
+      "hop2_prompt": "The opposite of empty is"
+    },
+    {
+      "name": "tooth-plural-v2",
+      "prompt": "The plural form of the word for one of the hard white structures used for biting is",
+      "target": "teeth",
+      "intermediates": [
+        "tooth"
+      ],
+      "base_id": "tooth-plural",
+      "family": "word_forms",
+      "relation": "description_plural",
+      "template_id": 2,
+      "group_id": "tooth",
+      "split": "test",
+      "hop1_prompt": "The singular noun meaning one of the hard white structures used for biting is",
+      "hop2_prompt": "The plural of tooth is"
+    },
+    {
+      "name": "person-plural-v2",
+      "prompt": "The plural form of the word for an individual human being is",
+      "target": "people",
+      "intermediates": [
+        "person"
+      ],
+      "base_id": "person-plural",
+      "family": "word_forms",
+      "relation": "description_plural",
+      "template_id": 2,
+      "group_id": "person",
+      "split": "test",
+      "hop1_prompt": "The singular noun meaning an individual human being is",
+      "hop2_prompt": "The plural of person is"
+    },
+    {
+      "name": "butterfly-legs-v2",
+      "prompt": "The leg count of the colorful winged insect that develops from a caterpillar is",
+      "target": "6",
+      "intermediates": [
+        "butterfly"
+      ],
+      "base_id": "butterfly-legs",
+      "family": "animals",
+      "relation": "animal_legs",
+      "template_id": 2,
+      "group_id": "butterfly",
+      "split": "test",
+      "hop1_prompt": "The name of the colorful winged insect that develops from a caterpillar is",
+      "hop2_prompt": "The number of legs on the butterfly is"
+    },
+    {
+      "name": "italy-country_continent-v1",
+      "prompt": "The continent containing the country whose capital is Rome is",
+      "target": "Europe",
+      "intermediates": [
+        "Italy"
+      ],
+      "base_id": "italy-country_continent",
+      "family": "geography",
+      "relation": "country_continent",
+      "template_id": 1,
+      "group_id": "italy",
+      "split": "test",
+      "hop1_prompt": "The country whose capital is Rome is",
+      "hop2_prompt": "The continent containing Italy is"
+    },
+    {
+      "name": "valley-opposite-v2",
+      "prompt": "An antonym of the word describing the altitude of a valley floor is",
+      "target": "high",
+      "intermediates": [
+        "low"
+      ],
+      "base_id": "valley-opposite",
+      "family": "opposites",
+      "relation": "property_antonym",
+      "template_id": 2,
+      "group_id": "low",
+      "split": "test",
+      "hop1_prompt": "The adjective describing the altitude of a valley floor is",
+      "hop2_prompt": "The opposite of low is"
+    },
+    {
+      "name": "duck-legs-v1",
+      "prompt": "The number of legs on the water bird that says quack is",
+      "target": "2",
+      "intermediates": [
+        "duck"
+      ],
+      "base_id": "duck-legs",
+      "family": "animals",
+      "relation": "animal_legs",
+      "template_id": 1,
+      "group_id": "duck",
+      "split": "test",
+      "hop1_prompt": "The name of the water bird that says quack is",
+      "hop2_prompt": "The number of legs on the duck is"
+    },
+    {
+      "name": "2-plus-3-times-2-v1",
+      "prompt": "(2 + 3) * 2 =",
+      "target": "10",
+      "intermediates": [
+        "five"
+      ],
+      "base_id": "2-plus-3-times-2",
+      "family": "arithmetic",
+      "relation": "plus_multiply",
+      "template_id": 1,
+      "group_id": "five",
+      "split": "test",
+      "hop1_prompt": "2 + 3 =",
+      "hop2_prompt": "5 * 2 ="
+    },
+    {
+      "name": "vietnam-country_continent-v2",
+      "prompt": "The continent where the country with Hanoi as its capital is located is",
+      "target": "Asia",
+      "intermediates": [
+        "Vietnam"
+      ],
+      "base_id": "vietnam-country_continent",
+      "family": "geography",
+      "relation": "country_continent",
+      "template_id": 2,
+      "group_id": "vietnam",
+      "split": "test",
+      "hop1_prompt": "The country whose capital is Hanoi is",
+      "hop2_prompt": "The continent containing Vietnam is"
+    },
+    {
+      "name": "brazil-country_language-v2",
+      "prompt": "The most widely spoken language in the country with Brasilia as its capital is",
+      "target": "Portuguese",
+      "intermediates": [
+        "Brazil"
+      ],
+      "base_id": "brazil-country_language",
+      "family": "geography",
+      "relation": "country_language",
+      "template_id": 2,
+      "group_id": "brazil",
+      "split": "dev",
+      "hop1_prompt": "The country whose capital is Brasilia is",
+      "hop2_prompt": "The most widely spoken language in Brazil is"
+    },
+    {
+      "name": "china-country_continent-v1",
+      "prompt": "The continent containing the country whose capital is Beijing is",
+      "target": "Asia",
+      "intermediates": [
+        "China"
+      ],
+      "base_id": "china-country_continent",
+      "family": "geography",
+      "relation": "country_continent",
+      "template_id": 1,
+      "group_id": "china",
+      "split": "test",
+      "hop1_prompt": "The country whose capital is Beijing is",
+      "hop2_prompt": "The continent containing China is"
+    },
+    {
+      "name": "stone-opposite-v1",
+      "prompt": "The opposite of the adjective describing the firmness of a stone is",
+      "target": "soft",
+      "intermediates": [
+        "hard"
+      ],
+      "base_id": "stone-opposite",
+      "family": "opposites",
+      "relation": "property_antonym",
+      "template_id": 1,
+      "group_id": "hard",
+      "split": "test",
+      "hop1_prompt": "The adjective describing the firmness of a stone is",
+      "hop2_prompt": "The opposite of hard is"
+    },
+    {
+      "name": "greece-country_language-v2",
+      "prompt": "The most widely spoken language in the country with Athens as its capital is",
+      "target": "Greek",
+      "intermediates": [
+        "Greece"
+      ],
+      "base_id": "greece-country_language",
+      "family": "geography",
+      "relation": "country_language",
+      "template_id": 2,
+      "group_id": "greece",
+      "split": "test",
+      "hop1_prompt": "The country whose capital is Athens is",
+      "hop2_prompt": "The most widely spoken language in Greece is"
+    },
+    {
+      "name": "ice-opposite-v2",
+      "prompt": "An antonym of the word describing the temperature of ice is",
+      "target": "hot",
+      "intermediates": [
+        "cold"
+      ],
+      "base_id": "ice-opposite",
+      "family": "opposites",
+      "relation": "property_antonym",
+      "template_id": 2,
+      "group_id": "cold",
+      "split": "test",
+      "hop1_prompt": "The adjective describing the temperature of ice is",
+      "hop2_prompt": "The opposite of cold is"
+    },
+    {
+      "name": "shelf-plural-v1",
+      "prompt": "The plural of the noun meaning a horizontal board on a wall used to hold books is",
+      "target": "shelves",
+      "intermediates": [
+        "shelf"
+      ],
+      "base_id": "shelf-plural",
+      "family": "word_forms",
+      "relation": "description_plural",
+      "template_id": 1,
+      "group_id": "shelf",
+      "split": "test",
+      "hop1_prompt": "The singular noun meaning a horizontal board on a wall used to hold books is",
+      "hop2_prompt": "The plural of shelf is"
+    },
+    {
+      "name": "mouse-size-opposite-v2",
+      "prompt": "An antonym of the word describing the size of a mouse is",
+      "target": "big",
+      "intermediates": [
+        "small"
+      ],
+      "base_id": "mouse-size-opposite",
+      "family": "opposites",
+      "relation": "property_antonym",
+      "template_id": 2,
+      "group_id": "small",
+      "split": "test",
+      "hop1_prompt": "The adjective describing the size of a mouse is",
+      "hop2_prompt": "The opposite of small is"
+    },
+    {
+      "name": "3-plus-5-times-2-v2",
+      "prompt": "The result of multiplying (3 + 5) by 2 is",
+      "target": "16",
+      "intermediates": [
+        "eight"
+      ],
+      "base_id": "3-plus-5-times-2",
+      "family": "arithmetic",
+      "relation": "plus_multiply",
+      "template_id": 2,
+      "group_id": "eight",
+      "split": "test",
+      "hop1_prompt": "3 + 5 =",
+      "hop2_prompt": "8 * 2 ="
+    },
+    {
+      "name": "cat-legs-v2",
+      "prompt": "The leg count of the domestic animal that says meow is",
+      "target": "4",
+      "intermediates": [
+        "cat"
+      ],
+      "base_id": "cat-legs",
+      "family": "animals",
+      "relation": "animal_legs",
+      "template_id": 2,
+      "group_id": "cat",
+      "split": "test",
+      "hop1_prompt": "The name of the domestic animal that says meow is",
+      "hop2_prompt": "The number of legs on the cat is"
+    },
+    {
+      "name": "hen-food-v1",
+      "prompt": "The food produced by the female farm bird that clucks is",
+      "target": "eggs",
+      "intermediates": [
+        "hen"
+      ],
+      "base_id": "hen-food",
+      "family": "animals",
+      "relation": "animal_food",
+      "template_id": 1,
+      "group_id": "hen",
+      "split": "test",
+      "hop1_prompt": "The name of the female farm bird that clucks is",
+      "hop2_prompt": "The food produced by the hen is"
+    },
+    {
+      "name": "thailand-country_continent-v1",
+      "prompt": "The continent containing the country whose capital is Bangkok is",
+      "target": "Asia",
+      "intermediates": [
+        "Thailand"
+      ],
+      "base_id": "thailand-country_continent",
+      "family": "geography",
+      "relation": "country_continent",
+      "template_id": 1,
+      "group_id": "thailand",
+      "split": "test",
+      "hop1_prompt": "The country whose capital is Bangkok is",
+      "hop2_prompt": "The continent containing Thailand is"
+    },
+    {
+      "name": "bottle-opposite-v2",
+      "prompt": "An antonym of the word describing a bottle with nothing inside is",
+      "target": "full",
+      "intermediates": [
+        "empty"
+      ],
+      "base_id": "bottle-opposite",
+      "family": "opposites",
+      "relation": "property_antonym",
+      "template_id": 2,
+      "group_id": "empty",
+      "split": "test",
+      "hop1_prompt": "The adjective describing a bottle with nothing inside is",
+      "hop2_prompt": "The opposite of empty is"
+    },
+    {
+      "name": "sweden-country_continent-v2",
+      "prompt": "The continent where the country with Stockholm as its capital is located is",
+      "target": "Europe",
+      "intermediates": [
+        "Sweden"
+      ],
+      "base_id": "sweden-country_continent",
+      "family": "geography",
+      "relation": "country_continent",
+      "template_id": 2,
+      "group_id": "sweden",
+      "split": "dev",
+      "hop1_prompt": "The country whose capital is Stockholm is",
+      "hop2_prompt": "The continent containing Sweden is"
+    },
+    {
+      "name": "dog-young-v1",
+      "prompt": "The young of the domestic animal that barks is called a",
+      "target": "puppy",
+      "intermediates": [
+        "dog"
+      ],
+      "base_id": "dog-young",
+      "family": "animals",
+      "relation": "animal_young",
+      "template_id": 1,
+      "group_id": "dog",
+      "split": "test",
+      "hop1_prompt": "The name of the domestic animal that barks is",
+      "hop2_prompt": "The young of the dog is called a"
+    },
+    {
+      "name": "pillow-opposite-v1",
+      "prompt": "The opposite of the adjective describing the firmness of a fluffy pillow is",
+      "target": "hard",
+      "intermediates": [
+        "soft"
+      ],
+      "base_id": "pillow-opposite",
+      "family": "opposites",
+      "relation": "property_antonym",
+      "template_id": 1,
+      "group_id": "soft",
+      "split": "test",
+      "hop1_prompt": "The adjective describing the firmness of a fluffy pillow is",
+      "hop2_prompt": "The opposite of soft is"
+    },
+    {
+      "name": "doorway-opposite-v2",
+      "prompt": "An antonym of the word describing a door swung wide to let people through is",
+      "target": "closed",
+      "intermediates": [
+        "open"
+      ],
+      "base_id": "doorway-opposite",
+      "family": "opposites",
+      "relation": "property_antonym",
+      "template_id": 2,
+      "group_id": "open",
+      "split": "dev",
+      "hop1_prompt": "The adjective describing a door swung wide to let people through is",
+      "hop2_prompt": "The opposite of open is"
+    },
+    {
+      "name": "poland-country_language-v1",
+      "prompt": "The most widely spoken language of the country whose capital is Warsaw is",
+      "target": "Polish",
+      "intermediates": [
+        "Poland"
+      ],
+      "base_id": "poland-country_language",
+      "family": "geography",
+      "relation": "country_language",
+      "template_id": 1,
+      "group_id": "poland",
+      "split": "test",
+      "hop1_prompt": "The country whose capital is Warsaw is",
+      "hop2_prompt": "The most widely spoken language in Poland is"
+    },
+    {
+      "name": "germany-country_language-v2",
+      "prompt": "The most widely spoken language in the country with Berlin as its capital is",
+      "target": "German",
+      "intermediates": [
+        "Germany"
+      ],
+      "base_id": "germany-country_language",
+      "family": "geography",
+      "relation": "country_language",
+      "template_id": 2,
+      "group_id": "germany",
+      "split": "test",
+      "hop1_prompt": "The country whose capital is Berlin is",
+      "hop2_prompt": "The most widely spoken language in Germany is"
+    },
+    {
+      "name": "5-plus-6-times-2-v1",
+      "prompt": "(5 + 6) * 2 =",
+      "target": "22",
+      "intermediates": [
+        "eleven"
+      ],
+      "base_id": "5-plus-6-times-2",
+      "family": "arithmetic",
+      "relation": "plus_multiply",
+      "template_id": 1,
+      "group_id": "eleven",
+      "split": "test",
+      "hop1_prompt": "5 + 6 =",
+      "hop2_prompt": "11 * 2 ="
+    },
+    {
+      "name": "3-plus-5-times-2-v1",
+      "prompt": "(3 + 5) * 2 =",
+      "target": "16",
+      "intermediates": [
+        "eight"
+      ],
+      "base_id": "3-plus-5-times-2",
+      "family": "arithmetic",
+      "relation": "plus_multiply",
+      "template_id": 1,
+      "group_id": "eight",
+      "split": "test",
+      "hop1_prompt": "3 + 5 =",
+      "hop2_prompt": "8 * 2 ="
+    },
+    {
+      "name": "racing-car-opposite-v1",
+      "prompt": "The opposite of the adjective describing the speed of a racing car is",
+      "target": "slow",
+      "intermediates": [
+        "fast"
+      ],
+      "base_id": "racing-car-opposite",
+      "family": "opposites",
+      "relation": "property_antonym",
+      "template_id": 1,
+      "group_id": "fast",
+      "split": "test",
+      "hop1_prompt": "The adjective describing the speed of a racing car is",
+      "hop2_prompt": "The opposite of fast is"
+    },
+    {
+      "name": "netherlands-country_language-v1",
+      "prompt": "The most widely spoken language of the country whose capital is Amsterdam is",
+      "target": "Dutch",
+      "intermediates": [
+        "Netherlands"
+      ],
+      "base_id": "netherlands-country_language",
+      "family": "geography",
+      "relation": "country_language",
+      "template_id": 1,
+      "group_id": "netherlands",
+      "split": "test",
+      "hop1_prompt": "The country whose capital is Amsterdam is",
+      "hop2_prompt": "The most widely spoken language in Netherlands is"
+    },
+    {
+      "name": "9-minus-6-times-4-v1",
+      "prompt": "(9 - 6) * 4 =",
+      "target": "12",
+      "intermediates": [
+        "three"
+      ],
+      "base_id": "9-minus-6-times-4",
+      "family": "arithmetic",
+      "relation": "minus_multiply",
+      "template_id": 1,
+      "group_id": "three",
+      "split": "test",
+      "hop1_prompt": "9 - 6 =",
+      "hop2_prompt": "3 * 4 ="
+    },
+    {
+      "name": "elephant-legs-v1",
+      "prompt": "The number of legs on the large land animal with a trunk and tusks is",
+      "target": "4",
+      "intermediates": [
+        "elephant"
+      ],
+      "base_id": "elephant-legs",
+      "family": "animals",
+      "relation": "animal_legs",
+      "template_id": 1,
+      "group_id": "elephant",
+      "split": "test",
+      "hop1_prompt": "The name of the large land animal with a trunk and tusks is",
+      "hop2_prompt": "The number of legs on the elephant is"
+    },
+    {
+      "name": "8-minus-2-times-3-v1",
+      "prompt": "(8 - 2) * 3 =",
+      "target": "18",
+      "intermediates": [
+        "six"
+      ],
+      "base_id": "8-minus-2-times-3",
+      "family": "arithmetic",
+      "relation": "minus_multiply",
+      "template_id": 1,
+      "group_id": "six",
+      "split": "test",
+      "hop1_prompt": "8 - 2 =",
+      "hop2_prompt": "6 * 3 ="
+    },
+    {
+      "name": "giraffe-neck-opposite-v1",
+      "prompt": "The opposite of the adjective describing the length of a giraffe's neck is",
+      "target": "short",
+      "intermediates": [
+        "long"
+      ],
+      "base_id": "giraffe-neck-opposite",
+      "family": "opposites",
+      "relation": "property_antonym",
+      "template_id": 1,
+      "group_id": "long",
+      "split": "test",
+      "hop1_prompt": "The adjective describing the length of a giraffe's neck is",
+      "hop2_prompt": "The opposite of long is"
+    },
+    {
+      "name": "portugal-country_continent-v2",
+      "prompt": "The continent where the country with Lisbon as its capital is located is",
+      "target": "Europe",
+      "intermediates": [
+        "Portugal"
+      ],
+      "base_id": "portugal-country_continent",
+      "family": "geography",
+      "relation": "country_continent",
+      "template_id": 2,
+      "group_id": "portugal",
+      "split": "test",
+      "hop1_prompt": "The country whose capital is Lisbon is",
+      "hop2_prompt": "The continent containing Portugal is"
+    },
+    {
+      "name": "brazil-country_continent-v2",
+      "prompt": "The continent where the country with Brasilia as its capital is located is",
+      "target": "South America",
+      "intermediates": [
+        "Brazil"
+      ],
+      "base_id": "brazil-country_continent",
+      "family": "geography",
+      "relation": "country_continent",
+      "template_id": 2,
+      "group_id": "brazil",
+      "split": "dev",
+      "hop1_prompt": "The country whose capital is Brasilia is",
+      "hop2_prompt": "The continent containing Brazil is"
+    },
+    {
+      "name": "3-plus-4-times-2-v2",
+      "prompt": "The result of multiplying (3 + 4) by 2 is",
+      "target": "14",
+      "intermediates": [
+        "seven"
+      ],
+      "base_id": "3-plus-4-times-2",
+      "family": "arithmetic",
+      "relation": "plus_multiply",
+      "template_id": 2,
+      "group_id": "seven",
+      "split": "test",
+      "hop1_prompt": "3 + 4 =",
+      "hop2_prompt": "7 * 2 ="
+    },
+    {
+      "name": "snail-opposite-v2",
+      "prompt": "An antonym of the word describing the speed of a snail is",
+      "target": "fast",
+      "intermediates": [
+        "slow"
+      ],
+      "base_id": "snail-opposite",
+      "family": "opposites",
+      "relation": "property_antonym",
+      "template_id": 2,
+      "group_id": "slow",
+      "split": "test",
+      "hop1_prompt": "The adjective describing the speed of a snail is",
+      "hop2_prompt": "The opposite of slow is"
+    },
+    {
+      "name": "2-plus-4-times-3-v2",
+      "prompt": "The result of multiplying (2 + 4) by 3 is",
+      "target": "18",
+      "intermediates": [
+        "six"
+      ],
+      "base_id": "2-plus-4-times-3",
+      "family": "arithmetic",
+      "relation": "plus_multiply",
+      "template_id": 2,
+      "group_id": "six",
+      "split": "test",
+      "hop1_prompt": "2 + 4 =",
+      "hop2_prompt": "6 * 3 ="
+    },
+    {
+      "name": "9-minus-5-times-3-v2",
+      "prompt": "The result of multiplying (9 - 5) by 3 is",
+      "target": "12",
+      "intermediates": [
+        "four"
+      ],
+      "base_id": "9-minus-5-times-3",
+      "family": "arithmetic",
+      "relation": "minus_multiply",
+      "template_id": 2,
+      "group_id": "four",
+      "split": "dev",
+      "hop1_prompt": "9 - 5 =",
+      "hop2_prompt": "4 * 3 ="
+    },
+    {
+      "name": "anvil-opposite-v2",
+      "prompt": "An antonym of the word describing the weight of an anvil is",
+      "target": "light",
+      "intermediates": [
+        "heavy"
+      ],
+      "base_id": "anvil-opposite",
+      "family": "opposites",
+      "relation": "property_antonym",
+      "template_id": 2,
+      "group_id": "heavy",
+      "split": "test",
+      "hop1_prompt": "The adjective describing the weight of an anvil is",
+      "hop2_prompt": "The opposite of heavy is"
+    },
+    {
+      "name": "horse-legs-v1",
+      "prompt": "The number of legs on the farm animal ridden by jockeys is",
+      "target": "4",
+      "intermediates": [
+        "horse"
+      ],
+      "base_id": "horse-legs",
+      "family": "animals",
+      "relation": "animal_legs",
+      "template_id": 1,
+      "group_id": "horse",
+      "split": "test",
+      "hop1_prompt": "The name of the farm animal ridden by jockeys is",
+      "hop2_prompt": "The number of legs on the horse is"
+    },
+    {
+      "name": "sheep-fiber-v2",
+      "prompt": "The fiber shorn from the farm animal that says baa is",
+      "target": "wool",
+      "intermediates": [
+        "sheep"
+      ],
+      "base_id": "sheep-fiber",
+      "family": "animals",
+      "relation": "animal_fiber",
+      "template_id": 2,
+      "group_id": "sheep",
+      "split": "dev",
+      "hop1_prompt": "The name of the farm animal that says baa is",
+      "hop2_prompt": "The textile fiber obtained from the sheep is"
+    },
+    {
+      "name": "2-plus-4-times-3-v1",
+      "prompt": "(2 + 4) * 3 =",
+      "target": "18",
+      "intermediates": [
+        "six"
+      ],
+      "base_id": "2-plus-4-times-3",
+      "family": "arithmetic",
+      "relation": "plus_multiply",
+      "template_id": 1,
+      "group_id": "six",
+      "split": "test",
+      "hop1_prompt": "2 + 4 =",
+      "hop2_prompt": "6 * 3 ="
+    },
+    {
+      "name": "argentina-country_continent-v2",
+      "prompt": "The continent where the country with Buenos Aires as its capital is located is",
+      "target": "South America",
+      "intermediates": [
+        "Argentina"
+      ],
+      "base_id": "argentina-country_continent",
+      "family": "geography",
+      "relation": "country_continent",
+      "template_id": 2,
+      "group_id": "argentina",
+      "split": "test",
+      "hop1_prompt": "The country whose capital is Buenos Aires is",
+      "hop2_prompt": "The continent containing Argentina is"
+    },
+    {
+      "name": "france-country_continent-v2",
+      "prompt": "The continent where the country with Paris as its capital is located is",
+      "target": "Europe",
+      "intermediates": [
+        "France"
+      ],
+      "base_id": "france-country_continent",
+      "family": "geography",
+      "relation": "country_continent",
+      "template_id": 2,
+      "group_id": "france",
+      "split": "dev",
+      "hop1_prompt": "The country whose capital is Paris is",
+      "hop2_prompt": "The continent containing France is"
+    },
+    {
+      "name": "giraffe-neck-opposite-v2",
+      "prompt": "An antonym of the word describing the length of a giraffe's neck is",
+      "target": "short",
+      "intermediates": [
+        "long"
+      ],
+      "base_id": "giraffe-neck-opposite",
+      "family": "opposites",
+      "relation": "property_antonym",
+      "template_id": 2,
+      "group_id": "long",
+      "split": "test",
+      "hop1_prompt": "The adjective describing the length of a giraffe's neck is",
+      "hop2_prompt": "The opposite of long is"
+    },
+    {
+      "name": "germany-country_continent-v2",
+      "prompt": "The continent where the country with Berlin as its capital is located is",
+      "target": "Europe",
+      "intermediates": [
+        "Germany"
+      ],
+      "base_id": "germany-country_continent",
+      "family": "geography",
+      "relation": "country_continent",
+      "template_id": 2,
+      "group_id": "germany",
+      "split": "test",
+      "hop1_prompt": "The country whose capital is Berlin is",
+      "hop2_prompt": "The continent containing Germany is"
+    },
+    {
+      "name": "italy-country_language-v2",
+      "prompt": "The most widely spoken language in the country with Rome as its capital is",
+      "target": "Italian",
+      "intermediates": [
+        "Italy"
+      ],
+      "base_id": "italy-country_language",
+      "family": "geography",
+      "relation": "country_language",
+      "template_id": 2,
+      "group_id": "italy",
+      "split": "test",
+      "hop1_prompt": "The country whose capital is Rome is",
+      "hop2_prompt": "The most widely spoken language in Italy is"
+    },
+    {
+      "name": "woman-plural-v1",
+      "prompt": "The plural of the noun meaning an adult female human is",
+      "target": "women",
+      "intermediates": [
+        "woman"
+      ],
+      "base_id": "woman-plural",
+      "family": "word_forms",
+      "relation": "description_plural",
+      "template_id": 1,
+      "group_id": "woman",
+      "split": "test",
+      "hop1_prompt": "The singular noun meaning an adult female human is",
+      "hop2_prompt": "The plural of woman is"
+    },
+    {
+      "name": "leaf-plural-v1",
+      "prompt": "The plural of the noun meaning one of the flat green parts growing on a tree is",
+      "target": "leaves",
+      "intermediates": [
+        "leaf"
+      ],
+      "base_id": "leaf-plural",
+      "family": "word_forms",
+      "relation": "description_plural",
+      "template_id": 1,
+      "group_id": "leaf",
+      "split": "test",
+      "hop1_prompt": "The singular noun meaning one of the flat green parts growing on a tree is",
+      "hop2_prompt": "The plural of leaf is"
+    },
+    {
+      "name": "dog-legs-v2",
+      "prompt": "The leg count of the domestic animal that barks is",
+      "target": "4",
+      "intermediates": [
+        "dog"
+      ],
+      "base_id": "dog-legs",
+      "family": "animals",
+      "relation": "animal_legs",
+      "template_id": 2,
+      "group_id": "dog",
+      "split": "test",
+      "hop1_prompt": "The name of the domestic animal that barks is",
+      "hop2_prompt": "The number of legs on the dog is"
+    },
+    {
+      "name": "8-minus-3-times-2-v1",
+      "prompt": "(8 - 3) * 2 =",
+      "target": "10",
+      "intermediates": [
+        "five"
+      ],
+      "base_id": "8-minus-3-times-2",
+      "family": "arithmetic",
+      "relation": "minus_multiply",
+      "template_id": 1,
+      "group_id": "five",
+      "split": "test",
+      "hop1_prompt": "8 - 3 =",
+      "hop2_prompt": "5 * 2 ="
+    },
+    {
+      "name": "3-plus-4-times-2-v1",
+      "prompt": "(3 + 4) * 2 =",
+      "target": "14",
+      "intermediates": [
+        "seven"
+      ],
+      "base_id": "3-plus-4-times-2",
+      "family": "arithmetic",
+      "relation": "plus_multiply",
+      "template_id": 1,
+      "group_id": "seven",
+      "split": "test",
+      "hop1_prompt": "3 + 4 =",
+      "hop2_prompt": "7 * 2 ="
+    },
+    {
+      "name": "poland-country_language-v2",
+      "prompt": "The most widely spoken language in the country with Warsaw as its capital is",
+      "target": "Polish",
+      "intermediates": [
+        "Poland"
+      ],
+      "base_id": "poland-country_language",
+      "family": "geography",
+      "relation": "country_language",
+      "template_id": 2,
+      "group_id": "poland",
+      "split": "test",
+      "hop1_prompt": "The country whose capital is Warsaw is",
+      "hop2_prompt": "The most widely spoken language in Poland is"
+    },
+    {
+      "name": "vietnam-country_continent-v1",
+      "prompt": "The continent containing the country whose capital is Hanoi is",
+      "target": "Asia",
+      "intermediates": [
+        "Vietnam"
+      ],
+      "base_id": "vietnam-country_continent",
+      "family": "geography",
+      "relation": "country_continent",
+      "template_id": 1,
+      "group_id": "vietnam",
+      "split": "test",
+      "hop1_prompt": "The country whose capital is Hanoi is",
+      "hop2_prompt": "The continent containing Vietnam is"
+    },
+    {
+      "name": "8-minus-2-times-3-v2",
+      "prompt": "The result of multiplying (8 - 2) by 3 is",
+      "target": "18",
+      "intermediates": [
+        "six"
+      ],
+      "base_id": "8-minus-2-times-3",
+      "family": "arithmetic",
+      "relation": "minus_multiply",
+      "template_id": 2,
+      "group_id": "six",
+      "split": "test",
+      "hop1_prompt": "8 - 2 =",
+      "hop2_prompt": "6 * 3 ="
+    },
+    {
+      "name": "japan-country_language-v1",
+      "prompt": "The most widely spoken language of the country whose capital is Tokyo is",
+      "target": "Japanese",
+      "intermediates": [
+        "Japan"
+      ],
+      "base_id": "japan-country_language",
+      "family": "geography",
+      "relation": "country_language",
+      "template_id": 1,
+      "group_id": "japan",
+      "split": "test",
+      "hop1_prompt": "The country whose capital is Tokyo is",
+      "hop2_prompt": "The most widely spoken language in Japan is"
+    },
+    {
+      "name": "spain-country_language-v1",
+      "prompt": "The most widely spoken language of the country whose capital is Madrid is",
+      "target": "Spanish",
+      "intermediates": [
+        "Spain"
+      ],
+      "base_id": "spain-country_language",
+      "family": "geography",
+      "relation": "country_language",
+      "template_id": 1,
+      "group_id": "spain",
+      "split": "test",
+      "hop1_prompt": "The country whose capital is Madrid is",
+      "hop2_prompt": "The most widely spoken language in Spain is"
+    },
+    {
+      "name": "4-plus-5-times-2-v1",
+      "prompt": "(4 + 5) * 2 =",
+      "target": "18",
+      "intermediates": [
+        "nine"
+      ],
+      "base_id": "4-plus-5-times-2",
+      "family": "arithmetic",
+      "relation": "plus_multiply",
+      "template_id": 1,
+      "group_id": "nine",
+      "split": "dev",
+      "hop1_prompt": "4 + 5 =",
+      "hop2_prompt": "9 * 2 ="
+    },
+    {
+      "name": "cow-drink-v1",
+      "prompt": "The drink produced by the farm animal that says moo is",
+      "target": "milk",
+      "intermediates": [
+        "cow"
+      ],
+      "base_id": "cow-drink",
+      "family": "animals",
+      "relation": "animal_drink",
+      "template_id": 1,
+      "group_id": "cow",
+      "split": "test",
+      "hop1_prompt": "The name of the farm animal that says moo is",
+      "hop2_prompt": "The drink produced by the cow is"
+    },
+    {
+      "name": "9-minus-2-times-2-v1",
+      "prompt": "(9 - 2) * 2 =",
+      "target": "14",
+      "intermediates": [
+        "seven"
+      ],
+      "base_id": "9-minus-2-times-2",
+      "family": "arithmetic",
+      "relation": "minus_multiply",
+      "template_id": 1,
+      "group_id": "seven",
+      "split": "test",
+      "hop1_prompt": "9 - 2 =",
+      "hop2_prompt": "7 * 2 ="
+    },
+    {
+      "name": "feather-opposite-v1",
+      "prompt": "The opposite of the adjective describing the weight of a feather is",
+      "target": "heavy",
+      "intermediates": [
+        "light"
+      ],
+      "base_id": "feather-opposite",
+      "family": "opposites",
+      "relation": "property_antonym",
+      "template_id": 1,
+      "group_id": "light",
+      "split": "dev",
+      "hop1_prompt": "The adjective describing the weight of a feather is",
+      "hop2_prompt": "The opposite of light is"
+    },
+    {
+      "name": "mountaintop-opposite-v1",
+      "prompt": "The opposite of the adjective describing the altitude of a mountaintop is",
+      "target": "low",
+      "intermediates": [
+        "high"
+      ],
+      "base_id": "mountaintop-opposite",
+      "family": "opposites",
+      "relation": "property_antonym",
+      "template_id": 1,
+      "group_id": "high",
+      "split": "dev",
+      "hop1_prompt": "The adjective describing the altitude of a mountaintop is",
+      "hop2_prompt": "The opposite of high is"
+    },
+    {
+      "name": "china-country_continent-v2",
+      "prompt": "The continent where the country with Beijing as its capital is located is",
+      "target": "Asia",
+      "intermediates": [
+        "China"
+      ],
+      "base_id": "china-country_continent",
+      "family": "geography",
+      "relation": "country_continent",
+      "template_id": 2,
+      "group_id": "china",
+      "split": "test",
+      "hop1_prompt": "The country whose capital is Beijing is",
+      "hop2_prompt": "The continent containing China is"
+    },
+    {
+      "name": "hen-food-v2",
+      "prompt": "The food obtained from the female farm bird that clucks is",
+      "target": "eggs",
+      "intermediates": [
+        "hen"
+      ],
+      "base_id": "hen-food",
+      "family": "animals",
+      "relation": "animal_food",
+      "template_id": 2,
+      "group_id": "hen",
+      "split": "test",
+      "hop1_prompt": "The name of the female farm bird that clucks is",
+      "hop2_prompt": "The food produced by the hen is"
+    },
+    {
+      "name": "ant-legs-v1",
+      "prompt": "The number of legs on the small insect that marches in trails to picnic food is",
+      "target": "6",
+      "intermediates": [
+        "ant"
+      ],
+      "base_id": "ant-legs",
+      "family": "animals",
+      "relation": "animal_legs",
+      "template_id": 1,
+      "group_id": "ant",
+      "split": "test",
+      "hop1_prompt": "The name of the small insect that marches in trails to picnic food is",
+      "hop2_prompt": "The number of legs on the ant is"
+    },
+    {
+      "name": "india-country_continent-v2",
+      "prompt": "The continent where the country with New Delhi as its capital is located is",
+      "target": "Asia",
+      "intermediates": [
+        "India"
+      ],
+      "base_id": "india-country_continent",
+      "family": "geography",
+      "relation": "country_continent",
+      "template_id": 2,
+      "group_id": "india",
+      "split": "test",
+      "hop1_prompt": "The country whose capital is New Delhi is",
+      "hop2_prompt": "The continent containing India is"
+    },
+    {
+      "name": "italy-country_continent-v2",
+      "prompt": "The continent where the country with Rome as its capital is located is",
+      "target": "Europe",
+      "intermediates": [
+        "Italy"
+      ],
+      "base_id": "italy-country_continent",
+      "family": "geography",
+      "relation": "country_continent",
+      "template_id": 2,
+      "group_id": "italy",
+      "split": "test",
+      "hop1_prompt": "The country whose capital is Rome is",
+      "hop2_prompt": "The continent containing Italy is"
+    },
+    {
+      "name": "india-country_language-v2",
+      "prompt": "The most widely spoken language in the country with New Delhi as its capital is",
+      "target": "Hindi",
+      "intermediates": [
+        "India"
+      ],
+      "base_id": "india-country_language",
+      "family": "geography",
+      "relation": "country_language",
+      "template_id": 2,
+      "group_id": "india",
+      "split": "test",
+      "hop1_prompt": "The country whose capital is New Delhi is",
+      "hop2_prompt": "The most widely spoken language in India is"
+    },
+    {
+      "name": "9-minus-6-times-4-v2",
+      "prompt": "The result of multiplying (9 - 6) by 4 is",
+      "target": "12",
+      "intermediates": [
+        "three"
+      ],
+      "base_id": "9-minus-6-times-4",
+      "family": "arithmetic",
+      "relation": "minus_multiply",
+      "template_id": 2,
+      "group_id": "three",
+      "split": "test",
+      "hop1_prompt": "9 - 6 =",
+      "hop2_prompt": "3 * 4 ="
+    },
+    {
+      "name": "anvil-opposite-v1",
+      "prompt": "The opposite of the adjective describing the weight of an anvil is",
+      "target": "light",
+      "intermediates": [
+        "heavy"
+      ],
+      "base_id": "anvil-opposite",
+      "family": "opposites",
+      "relation": "property_antonym",
+      "template_id": 1,
+      "group_id": "heavy",
+      "split": "test",
+      "hop1_prompt": "The adjective describing the weight of an anvil is",
+      "hop2_prompt": "The opposite of heavy is"
+    },
+    {
+      "name": "dog-young-v2",
+      "prompt": "The name for a baby of the domestic animal that barks is",
+      "target": "puppy",
+      "intermediates": [
+        "dog"
+      ],
+      "base_id": "dog-young",
+      "family": "animals",
+      "relation": "animal_young",
+      "template_id": 2,
+      "group_id": "dog",
+      "split": "test",
+      "hop1_prompt": "The name of the domestic animal that barks is",
+      "hop2_prompt": "The young of the dog is called a"
+    },
+    {
+      "name": "4-plus-6-times-2-v2",
+      "prompt": "The result of multiplying (4 + 6) by 2 is",
+      "target": "20",
+      "intermediates": [
+        "ten"
+      ],
+      "base_id": "4-plus-6-times-2",
+      "family": "arithmetic",
+      "relation": "plus_multiply",
+      "template_id": 2,
+      "group_id": "ten",
+      "split": "test",
+      "hop1_prompt": "4 + 6 =",
+      "hop2_prompt": "10 * 2 ="
+    },
+    {
+      "name": "thailand-country_continent-v2",
+      "prompt": "The continent where the country with Bangkok as its capital is located is",
+      "target": "Asia",
+      "intermediates": [
+        "Thailand"
+      ],
+      "base_id": "thailand-country_continent",
+      "family": "geography",
+      "relation": "country_continent",
+      "template_id": 2,
+      "group_id": "thailand",
+      "split": "test",
+      "hop1_prompt": "The country whose capital is Bangkok is",
+      "hop2_prompt": "The continent containing Thailand is"
+    },
+    {
+      "name": "elephant-size-opposite-v2",
+      "prompt": "An antonym of the word describing the size of an elephant is",
+      "target": "small",
+      "intermediates": [
+        "big"
+      ],
+      "base_id": "elephant-size-opposite",
+      "family": "opposites",
+      "relation": "property_antonym",
+      "template_id": 2,
+      "group_id": "big",
+      "split": "dev",
+      "hop1_prompt": "The adjective describing the size of an elephant is",
+      "hop2_prompt": "The opposite of big is"
+    },
+    {
+      "name": "snake-legs-v1",
+      "prompt": "The number of legs on the long reptile that hisses and slithers is",
+      "target": "0",
+      "intermediates": [
+        "snake"
+      ],
+      "base_id": "snake-legs",
+      "family": "animals",
+      "relation": "animal_legs",
+      "template_id": 1,
+      "group_id": "snake",
+      "split": "dev",
+      "hop1_prompt": "The name of the long reptile that hisses and slithers is",
+      "hop2_prompt": "The number of legs on the snake is"
+    },
+    {
+      "name": "elephant-legs-v2",
+      "prompt": "The leg count of the large land animal with a trunk and tusks is",
+      "target": "4",
+      "intermediates": [
+        "elephant"
+      ],
+      "base_id": "elephant-legs",
+      "family": "animals",
+      "relation": "animal_legs",
+      "template_id": 2,
+      "group_id": "elephant",
+      "split": "test",
+      "hop1_prompt": "The name of the large land animal with a trunk and tusks is",
+      "hop2_prompt": "The number of legs on the elephant is"
+    },
+    {
+      "name": "brazil-country_language-v1",
+      "prompt": "The most widely spoken language of the country whose capital is Brasilia is",
+      "target": "Portuguese",
+      "intermediates": [
+        "Brazil"
+      ],
+      "base_id": "brazil-country_language",
+      "family": "geography",
+      "relation": "country_language",
+      "template_id": 1,
+      "group_id": "brazil",
+      "split": "dev",
+      "hop1_prompt": "The country whose capital is Brasilia is",
+      "hop2_prompt": "The most widely spoken language in Brazil is"
+    },
+    {
+      "name": "woman-plural-v2",
+      "prompt": "The plural form of the word for an adult female human is",
+      "target": "women",
+      "intermediates": [
+        "woman"
+      ],
+      "base_id": "woman-plural",
+      "family": "word_forms",
+      "relation": "description_plural",
+      "template_id": 2,
+      "group_id": "woman",
+      "split": "test",
+      "hop1_prompt": "The singular noun meaning an adult female human is",
+      "hop2_prompt": "The plural of woman is"
+    },
+    {
+      "name": "life-plural-v2",
+      "prompt": "The plural form of the word for the state of being alive is",
+      "target": "lives",
+      "intermediates": [
+        "life"
+      ],
+      "base_id": "life-plural",
+      "family": "word_forms",
+      "relation": "description_plural",
+      "template_id": 2,
+      "group_id": "life",
+      "split": "test",
+      "hop1_prompt": "The singular noun meaning the state of being alive is",
+      "hop2_prompt": "The plural of life is"
+    },
+    {
+      "name": "argentina-country_language-v2",
+      "prompt": "The most widely spoken language in the country with Buenos Aires as its capital is",
+      "target": "Spanish",
+      "intermediates": [
+        "Argentina"
+      ],
+      "base_id": "argentina-country_language",
+      "family": "geography",
+      "relation": "country_language",
+      "template_id": 2,
+      "group_id": "argentina",
+      "split": "test",
+      "hop1_prompt": "The country whose capital is Buenos Aires is",
+      "hop2_prompt": "The most widely spoken language in Argentina is"
+    },
+    {
+      "name": "poland-country_continent-v1",
+      "prompt": "The continent containing the country whose capital is Warsaw is",
+      "target": "Europe",
+      "intermediates": [
+        "Poland"
+      ],
+      "base_id": "poland-country_continent",
+      "family": "geography",
+      "relation": "country_continent",
+      "template_id": 1,
+      "group_id": "poland",
+      "split": "test",
+      "hop1_prompt": "The country whose capital is Warsaw is",
+      "hop2_prompt": "The continent containing Poland is"
+    },
+    {
+      "name": "person-plural-v1",
+      "prompt": "The plural of the noun meaning an individual human being is",
+      "target": "people",
+      "intermediates": [
+        "person"
+      ],
+      "base_id": "person-plural",
+      "family": "word_forms",
+      "relation": "description_plural",
+      "template_id": 1,
+      "group_id": "person",
+      "split": "test",
+      "hop1_prompt": "The singular noun meaning an individual human being is",
+      "hop2_prompt": "The plural of person is"
+    },
+    {
+      "name": "8-minus-3-times-2-v2",
+      "prompt": "The result of multiplying (8 - 3) by 2 is",
+      "target": "10",
+      "intermediates": [
+        "five"
+      ],
+      "base_id": "8-minus-3-times-2",
+      "family": "arithmetic",
+      "relation": "minus_multiply",
+      "template_id": 2,
+      "group_id": "five",
+      "split": "test",
+      "hop1_prompt": "8 - 3 =",
+      "hop2_prompt": "5 * 2 ="
+    },
+    {
+      "name": "penguin-legs-v2",
+      "prompt": "The leg count of the flightless black-and-white bird of Antarctica is",
+      "target": "2",
+      "intermediates": [
+        "penguin"
+      ],
+      "base_id": "penguin-legs",
+      "family": "animals",
+      "relation": "animal_legs",
+      "template_id": 2,
+      "group_id": "penguin",
+      "split": "test",
+      "hop1_prompt": "The name of the flightless black-and-white bird of Antarctica is",
+      "hop2_prompt": "The number of legs on the penguin is"
+    },
+    {
+      "name": "4-plus-6-times-2-v1",
+      "prompt": "(4 + 6) * 2 =",
+      "target": "20",
+      "intermediates": [
+        "ten"
+      ],
+      "base_id": "4-plus-6-times-2",
+      "family": "arithmetic",
+      "relation": "plus_multiply",
+      "template_id": 1,
+      "group_id": "ten",
+      "split": "test",
+      "hop1_prompt": "4 + 6 =",
+      "hop2_prompt": "10 * 2 ="
+    },
+    {
+      "name": "knife-plural-v2",
+      "prompt": "The plural form of the word for the sharp utensil used to slice bread is",
+      "target": "knives",
+      "intermediates": [
+        "knife"
+      ],
+      "base_id": "knife-plural",
+      "family": "word_forms",
+      "relation": "description_plural",
+      "template_id": 2,
+      "group_id": "knife",
+      "split": "test",
+      "hop1_prompt": "The singular noun meaning the sharp utensil used to slice bread is",
+      "hop2_prompt": "The plural of knife is"
+    },
+    {
+      "name": "7-minus-3-times-2-v2",
+      "prompt": "The result of multiplying (7 - 3) by 2 is",
+      "target": "8",
+      "intermediates": [
+        "four"
+      ],
+      "base_id": "7-minus-3-times-2",
+      "family": "arithmetic",
+      "relation": "minus_multiply",
+      "template_id": 2,
+      "group_id": "four",
+      "split": "dev",
+      "hop1_prompt": "7 - 3 =",
+      "hop2_prompt": "4 * 2 ="
+    },
+    {
+      "name": "cat-young-v2",
+      "prompt": "The name for a baby of the domestic animal that says meow is",
+      "target": "kitten",
+      "intermediates": [
+        "cat"
+      ],
+      "base_id": "cat-young",
+      "family": "animals",
+      "relation": "animal_young",
+      "template_id": 2,
+      "group_id": "cat",
+      "split": "test",
+      "hop1_prompt": "The name of the domestic animal that says meow is",
+      "hop2_prompt": "The young of the cat is called a"
+    },
+    {
+      "name": "portugal-country_language-v2",
+      "prompt": "The most widely spoken language in the country with Lisbon as its capital is",
+      "target": "Portuguese",
+      "intermediates": [
+        "Portugal"
+      ],
+      "base_id": "portugal-country_language",
+      "family": "geography",
+      "relation": "country_language",
+      "template_id": 2,
+      "group_id": "portugal",
+      "split": "test",
+      "hop1_prompt": "The country whose capital is Lisbon is",
+      "hop2_prompt": "The most widely spoken language in Portugal is"
+    },
+    {
+      "name": "italy-country_language-v1",
+      "prompt": "The most widely spoken language of the country whose capital is Rome is",
+      "target": "Italian",
+      "intermediates": [
+        "Italy"
+      ],
+      "base_id": "italy-country_language",
+      "family": "geography",
+      "relation": "country_language",
+      "template_id": 1,
+      "group_id": "italy",
+      "split": "test",
+      "hop1_prompt": "The country whose capital is Rome is",
+      "hop2_prompt": "The most widely spoken language in Italy is"
+    },
+    {
+      "name": "sheep-young-v1",
+      "prompt": "The young of the farm animal that says baa is called a",
+      "target": "lamb",
+      "intermediates": [
+        "sheep"
+      ],
+      "base_id": "sheep-young",
+      "family": "animals",
+      "relation": "animal_young",
+      "template_id": 1,
+      "group_id": "sheep",
+      "split": "dev",
+      "hop1_prompt": "The name of the farm animal that says baa is",
+      "hop2_prompt": "The young of the sheep is called a"
+    },
+    {
+      "name": "vietnam-country_language-v2",
+      "prompt": "The most widely spoken language in the country with Hanoi as its capital is",
+      "target": "Vietnamese",
+      "intermediates": [
+        "Vietnam"
+      ],
+      "base_id": "vietnam-country_language",
+      "family": "geography",
+      "relation": "country_language",
+      "template_id": 2,
+      "group_id": "vietnam",
+      "split": "test",
+      "hop1_prompt": "The country whose capital is Hanoi is",
+      "hop2_prompt": "The most widely spoken language in Vietnam is"
+    },
+    {
+      "name": "child-plural-v2",
+      "prompt": "The plural form of the word for a young human being is",
+      "target": "children",
+      "intermediates": [
+        "child"
+      ],
+      "base_id": "child-plural",
+      "family": "word_forms",
+      "relation": "description_plural",
+      "template_id": 2,
+      "group_id": "child",
+      "split": "dev",
+      "hop1_prompt": "The singular noun meaning a young human being is",
+      "hop2_prompt": "The plural of child is"
+    },
+    {
+      "name": "poland-country_continent-v2",
+      "prompt": "The continent where the country with Warsaw as its capital is located is",
+      "target": "Europe",
+      "intermediates": [
+        "Poland"
+      ],
+      "base_id": "poland-country_continent",
+      "family": "geography",
+      "relation": "country_continent",
+      "template_id": 2,
+      "group_id": "poland",
+      "split": "test",
+      "hop1_prompt": "The country whose capital is Warsaw is",
+      "hop2_prompt": "The continent containing Poland is"
+    },
+    {
+      "name": "racing-car-opposite-v2",
+      "prompt": "An antonym of the word describing the speed of a racing car is",
+      "target": "slow",
+      "intermediates": [
+        "fast"
+      ],
+      "base_id": "racing-car-opposite",
+      "family": "opposites",
+      "relation": "property_antonym",
+      "template_id": 2,
+      "group_id": "fast",
+      "split": "test",
+      "hop1_prompt": "The adjective describing the speed of a racing car is",
+      "hop2_prompt": "The opposite of fast is"
+    },
+    {
+      "name": "germany-country_language-v1",
+      "prompt": "The most widely spoken language of the country whose capital is Berlin is",
+      "target": "German",
+      "intermediates": [
+        "Germany"
+      ],
+      "base_id": "germany-country_language",
+      "family": "geography",
+      "relation": "country_language",
+      "template_id": 1,
+      "group_id": "germany",
+      "split": "test",
+      "hop1_prompt": "The country whose capital is Berlin is",
+      "hop2_prompt": "The most widely spoken language in Germany is"
+    },
+    {
+      "name": "netherlands-country_continent-v2",
+      "prompt": "The continent where the country with Amsterdam as its capital is located is",
+      "target": "Europe",
+      "intermediates": [
+        "Netherlands"
+      ],
+      "base_id": "netherlands-country_continent",
+      "family": "geography",
+      "relation": "country_continent",
+      "template_id": 2,
+      "group_id": "netherlands",
+      "split": "test",
+      "hop1_prompt": "The country whose capital is Amsterdam is",
+      "hop2_prompt": "The continent containing Netherlands is"
+    },
+    {
+      "name": "glass-opposite-v2",
+      "prompt": "An antonym of the word describing a glass filled to the brim is",
+      "target": "empty",
+      "intermediates": [
+        "full"
+      ],
+      "base_id": "glass-opposite",
+      "family": "opposites",
+      "relation": "property_antonym",
+      "template_id": 2,
+      "group_id": "full",
+      "split": "test",
+      "hop1_prompt": "The adjective describing a glass filled to the brim is",
+      "hop2_prompt": "The opposite of full is"
+    },
+    {
+      "name": "sweden-country_language-v1",
+      "prompt": "The most widely spoken language of the country whose capital is Stockholm is",
+      "target": "Swedish",
+      "intermediates": [
+        "Sweden"
+      ],
+      "base_id": "sweden-country_language",
+      "family": "geography",
+      "relation": "country_language",
+      "template_id": 1,
+      "group_id": "sweden",
+      "split": "dev",
+      "hop1_prompt": "The country whose capital is Stockholm is",
+      "hop2_prompt": "The most widely spoken language in Sweden is"
+    },
+    {
+      "name": "japan-country_continent-v1",
+      "prompt": "The continent containing the country whose capital is Tokyo is",
+      "target": "Asia",
+      "intermediates": [
+        "Japan"
+      ],
+      "base_id": "japan-country_continent",
+      "family": "geography",
+      "relation": "country_continent",
+      "template_id": 1,
+      "group_id": "japan",
+      "split": "test",
+      "hop1_prompt": "The country whose capital is Tokyo is",
+      "hop2_prompt": "The continent containing Japan is"
+    },
+    {
+      "name": "child-plural-v1",
+      "prompt": "The plural of the noun meaning a young human being is",
+      "target": "children",
+      "intermediates": [
+        "child"
+      ],
+      "base_id": "child-plural",
+      "family": "word_forms",
+      "relation": "description_plural",
+      "template_id": 1,
+      "group_id": "child",
+      "split": "dev",
+      "hop1_prompt": "The singular noun meaning a young human being is",
+      "hop2_prompt": "The plural of child is"
+    },
+    {
+      "name": "boiling-water-opposite-v1",
+      "prompt": "The opposite of the adjective describing the temperature of boiling water is",
+      "target": "cold",
+      "intermediates": [
+        "hot"
+      ],
+      "base_id": "boiling-water-opposite",
+      "family": "opposites",
+      "relation": "property_antonym",
+      "template_id": 1,
+      "group_id": "hot",
+      "split": "test",
+      "hop1_prompt": "The adjective describing the temperature of boiling water is",
+      "hop2_prompt": "The opposite of hot is"
+    },
+    {
+      "name": "cow-young-v2",
+      "prompt": "The name for a baby of the farm animal that says moo is",
+      "target": "calf",
+      "intermediates": [
+        "cow"
+      ],
+      "base_id": "cow-young",
+      "family": "animals",
+      "relation": "animal_young",
+      "template_id": 2,
+      "group_id": "cow",
+      "split": "test",
+      "hop1_prompt": "The name of the farm animal that says moo is",
+      "hop2_prompt": "The young of the cow is called a"
+    },
+    {
+      "name": "china-country_language-v1",
+      "prompt": "The most widely spoken language of the country whose capital is Beijing is",
+      "target": "Mandarin",
+      "intermediates": [
+        "China"
+      ],
+      "base_id": "china-country_language",
+      "family": "geography",
+      "relation": "country_language",
+      "template_id": 1,
+      "group_id": "china",
+      "split": "test",
+      "hop1_prompt": "The country whose capital is Beijing is",
+      "hop2_prompt": "The most widely spoken language in China is"
+    },
+    {
+      "name": "5-plus-7-times-2-v1",
+      "prompt": "(5 + 7) * 2 =",
+      "target": "24",
+      "intermediates": [
+        "twelve"
+      ],
+      "base_id": "5-plus-7-times-2",
+      "family": "arithmetic",
+      "relation": "plus_multiply",
+      "template_id": 1,
+      "group_id": "twelve",
+      "split": "test",
+      "hop1_prompt": "5 + 7 =",
+      "hop2_prompt": "12 * 2 ="
+    },
+    {
+      "name": "bee-food-v1",
+      "prompt": "The food produced by the striped flying insect that lives in a hive is",
+      "target": "honey",
+      "intermediates": [
+        "bee"
+      ],
+      "base_id": "bee-food",
+      "family": "animals",
+      "relation": "animal_food",
+      "template_id": 1,
+      "group_id": "bee",
+      "split": "test",
+      "hop1_prompt": "The name of the striped flying insect that lives in a hive is",
+      "hop2_prompt": "The food produced by the bee is"
+    },
+    {
+      "name": "man-plural-v2",
+      "prompt": "The plural form of the word for an adult male human is",
+      "target": "men",
+      "intermediates": [
+        "man"
+      ],
+      "base_id": "man-plural",
+      "family": "word_forms",
+      "relation": "description_plural",
+      "template_id": 2,
+      "group_id": "man",
+      "split": "test",
+      "hop1_prompt": "The singular noun meaning an adult male human is",
+      "hop2_prompt": "The plural of man is"
+    },
+    {
+      "name": "spain-country_continent-v2",
+      "prompt": "The continent where the country with Madrid as its capital is located is",
+      "target": "Europe",
+      "intermediates": [
+        "Spain"
+      ],
+      "base_id": "spain-country_continent",
+      "family": "geography",
+      "relation": "country_continent",
+      "template_id": 2,
+      "group_id": "spain",
+      "split": "test",
+      "hop1_prompt": "The country whose capital is Madrid is",
+      "hop2_prompt": "The continent containing Spain is"
+    },
+    {
+      "name": "greece-country_continent-v1",
+      "prompt": "The continent containing the country whose capital is Athens is",
+      "target": "Europe",
+      "intermediates": [
+        "Greece"
+      ],
+      "base_id": "greece-country_continent",
+      "family": "geography",
+      "relation": "country_continent",
+      "template_id": 1,
+      "group_id": "greece",
+      "split": "test",
+      "hop1_prompt": "The country whose capital is Athens is",
+      "hop2_prompt": "The continent containing Greece is"
+    },
+    {
+      "name": "france-country_language-v1",
+      "prompt": "The most widely spoken language of the country whose capital is Paris is",
+      "target": "French",
+      "intermediates": [
+        "France"
+      ],
+      "base_id": "france-country_language",
+      "family": "geography",
+      "relation": "country_language",
+      "template_id": 1,
+      "group_id": "france",
+      "split": "dev",
+      "hop1_prompt": "The country whose capital is Paris is",
+      "hop2_prompt": "The most widely spoken language in France is"
+    },
+    {
+      "name": "wolf-plural-v1",
+      "prompt": "The plural of the noun meaning the wild canine that howls in packs is",
+      "target": "wolves",
+      "intermediates": [
+        "wolf"
+      ],
+      "base_id": "wolf-plural",
+      "family": "word_forms",
+      "relation": "description_plural",
+      "template_id": 1,
+      "group_id": "wolf",
+      "split": "test",
+      "hop1_prompt": "The singular noun meaning the wild canine that howls in packs is",
+      "hop2_prompt": "The plural of wolf is"
+    },
+    {
+      "name": "man-plural-v1",
+      "prompt": "The plural of the noun meaning an adult male human is",
+      "target": "men",
+      "intermediates": [
+        "man"
+      ],
+      "base_id": "man-plural",
+      "family": "word_forms",
+      "relation": "description_plural",
+      "template_id": 1,
+      "group_id": "man",
+      "split": "test",
+      "hop1_prompt": "The singular noun meaning an adult male human is",
+      "hop2_prompt": "The plural of man is"
+    },
+    {
+      "name": "wolf-plural-v2",
+      "prompt": "The plural form of the word for the wild canine that howls in packs is",
+      "target": "wolves",
+      "intermediates": [
+        "wolf"
+      ],
+      "base_id": "wolf-plural",
+      "family": "word_forms",
+      "relation": "description_plural",
+      "template_id": 2,
+      "group_id": "wolf",
+      "split": "test",
+      "hop1_prompt": "The singular noun meaning the wild canine that howls in packs is",
+      "hop2_prompt": "The plural of wolf is"
+    },
+    {
+      "name": "boiling-water-opposite-v2",
+      "prompt": "An antonym of the word describing the temperature of boiling water is",
+      "target": "cold",
+      "intermediates": [
+        "hot"
+      ],
+      "base_id": "boiling-water-opposite",
+      "family": "opposites",
+      "relation": "property_antonym",
+      "template_id": 2,
+      "group_id": "hot",
+      "split": "test",
+      "hop1_prompt": "The adjective describing the temperature of boiling water is",
+      "hop2_prompt": "The opposite of hot is"
+    },
+    {
+      "name": "9-minus-5-times-3-v1",
+      "prompt": "(9 - 5) * 3 =",
+      "target": "12",
+      "intermediates": [
+        "four"
+      ],
+      "base_id": "9-minus-5-times-3",
+      "family": "arithmetic",
+      "relation": "minus_multiply",
+      "template_id": 1,
+      "group_id": "four",
+      "split": "dev",
+      "hop1_prompt": "9 - 5 =",
+      "hop2_prompt": "4 * 3 ="
+    },
+    {
+      "name": "spider-legs-v2",
+      "prompt": "The leg count of the animal that spins silk webs is",
+      "target": "8",
+      "intermediates": [
+        "spider"
+      ],
+      "base_id": "spider-legs",
+      "family": "animals",
+      "relation": "animal_legs",
+      "template_id": 2,
+      "group_id": "spider",
+      "split": "dev",
+      "hop1_prompt": "The name of the animal that spins silk webs is",
+      "hop2_prompt": "The number of legs on the spider is"
+    },
+    {
+      "name": "8-minus-5-times-2-v2",
+      "prompt": "The result of multiplying (8 - 5) by 2 is",
+      "target": "6",
+      "intermediates": [
+        "three"
+      ],
+      "base_id": "8-minus-5-times-2",
+      "family": "arithmetic",
+      "relation": "minus_multiply",
+      "template_id": 2,
+      "group_id": "three",
+      "split": "test",
+      "hop1_prompt": "8 - 5 =",
+      "hop2_prompt": "3 * 2 ="
+    },
+    {
+      "name": "5-plus-7-times-2-v2",
+      "prompt": "The result of multiplying (5 + 7) by 2 is",
+      "target": "24",
+      "intermediates": [
+        "twelve"
+      ],
+      "base_id": "5-plus-7-times-2",
+      "family": "arithmetic",
+      "relation": "plus_multiply",
+      "template_id": 2,
+      "group_id": "twelve",
+      "split": "test",
+      "hop1_prompt": "5 + 7 =",
+      "hop2_prompt": "12 * 2 ="
+    },
+    {
+      "name": "leaf-plural-v2",
+      "prompt": "The plural form of the word for one of the flat green parts growing on a tree is",
+      "target": "leaves",
+      "intermediates": [
+        "leaf"
+      ],
+      "base_id": "leaf-plural",
+      "family": "word_forms",
+      "relation": "description_plural",
+      "template_id": 2,
+      "group_id": "leaf",
+      "split": "test",
+      "hop1_prompt": "The singular noun meaning one of the flat green parts growing on a tree is",
+      "hop2_prompt": "The plural of leaf is"
+    },
+    {
+      "name": "horse-legs-v2",
+      "prompt": "The leg count of the farm animal ridden by jockeys is",
+      "target": "4",
+      "intermediates": [
+        "horse"
+      ],
+      "base_id": "horse-legs",
+      "family": "animals",
+      "relation": "animal_legs",
+      "template_id": 2,
+      "group_id": "horse",
+      "split": "test",
+      "hop1_prompt": "The name of the farm animal ridden by jockeys is",
+      "hop2_prompt": "The number of legs on the horse is"
+    },
+    {
+      "name": "france-country_language-v2",
+      "prompt": "The most widely spoken language in the country with Paris as its capital is",
+      "target": "French",
+      "intermediates": [
+        "France"
+      ],
+      "base_id": "france-country_language",
+      "family": "geography",
+      "relation": "country_language",
+      "template_id": 2,
+      "group_id": "france",
+      "split": "dev",
+      "hop1_prompt": "The country whose capital is Paris is",
+      "hop2_prompt": "The most widely spoken language in France is"
+    },
+    {
+      "name": "germany-country_continent-v1",
+      "prompt": "The continent containing the country whose capital is Berlin is",
+      "target": "Europe",
+      "intermediates": [
+        "Germany"
+      ],
+      "base_id": "germany-country_continent",
+      "family": "geography",
+      "relation": "country_continent",
+      "template_id": 1,
+      "group_id": "germany",
+      "split": "test",
+      "hop1_prompt": "The country whose capital is Berlin is",
+      "hop2_prompt": "The continent containing Germany is"
+    },
+    {
+      "name": "sheep-young-v2",
+      "prompt": "The name for a baby of the farm animal that says baa is",
+      "target": "lamb",
+      "intermediates": [
+        "sheep"
+      ],
+      "base_id": "sheep-young",
+      "family": "animals",
+      "relation": "animal_young",
+      "template_id": 2,
+      "group_id": "sheep",
+      "split": "dev",
+      "hop1_prompt": "The name of the farm animal that says baa is",
+      "hop2_prompt": "The young of the sheep is called a"
+    },
+    {
+      "name": "japan-country_language-v2",
+      "prompt": "The most widely spoken language in the country with Tokyo as its capital is",
+      "target": "Japanese",
+      "intermediates": [
+        "Japan"
+      ],
+      "base_id": "japan-country_language",
+      "family": "geography",
+      "relation": "country_language",
+      "template_id": 2,
+      "group_id": "japan",
+      "split": "test",
+      "hop1_prompt": "The country whose capital is Tokyo is",
+      "hop2_prompt": "The most widely spoken language in Japan is"
+    },
+    {
+      "name": "cow-drink-v2",
+      "prompt": "The drink obtained from the farm animal that says moo is",
+      "target": "milk",
+      "intermediates": [
+        "cow"
+      ],
+      "base_id": "cow-drink",
+      "family": "animals",
+      "relation": "animal_drink",
+      "template_id": 2,
+      "group_id": "cow",
+      "split": "test",
+      "hop1_prompt": "The name of the farm animal that says moo is",
+      "hop2_prompt": "The drink produced by the cow is"
+    },
+    {
+      "name": "vietnam-country_language-v1",
+      "prompt": "The most widely spoken language of the country whose capital is Hanoi is",
+      "target": "Vietnamese",
+      "intermediates": [
+        "Vietnam"
+      ],
+      "base_id": "vietnam-country_language",
+      "family": "geography",
+      "relation": "country_language",
+      "template_id": 1,
+      "group_id": "vietnam",
+      "split": "test",
+      "hop1_prompt": "The country whose capital is Hanoi is",
+      "hop2_prompt": "The most widely spoken language in Vietnam is"
+    },
+    {
+      "name": "bee-legs-v1",
+      "prompt": "The number of legs on the striped flying insect that lives in a hive is",
+      "target": "6",
+      "intermediates": [
+        "bee"
+      ],
+      "base_id": "bee-legs",
+      "family": "animals",
+      "relation": "animal_legs",
+      "template_id": 1,
+      "group_id": "bee",
+      "split": "test",
+      "hop1_prompt": "The name of the striped flying insect that lives in a hive is",
+      "hop2_prompt": "The number of legs on the bee is"
+    },
+    {
+      "name": "cat-legs-v1",
+      "prompt": "The number of legs on the domestic animal that says meow is",
+      "target": "4",
+      "intermediates": [
+        "cat"
+      ],
+      "base_id": "cat-legs",
+      "family": "animals",
+      "relation": "animal_legs",
+      "template_id": 1,
+      "group_id": "cat",
+      "split": "test",
+      "hop1_prompt": "The name of the domestic animal that says meow is",
+      "hop2_prompt": "The number of legs on the cat is"
+    },
+    {
+      "name": "9-minus-3-times-2-v1",
+      "prompt": "(9 - 3) * 2 =",
+      "target": "12",
+      "intermediates": [
+        "six"
+      ],
+      "base_id": "9-minus-3-times-2",
+      "family": "arithmetic",
+      "relation": "minus_multiply",
+      "template_id": 1,
+      "group_id": "six",
+      "split": "test",
+      "hop1_prompt": "9 - 3 =",
+      "hop2_prompt": "6 * 2 ="
+    },
+    {
+      "name": "duck-legs-v2",
+      "prompt": "The leg count of the water bird that says quack is",
+      "target": "2",
+      "intermediates": [
+        "duck"
+      ],
+      "base_id": "duck-legs",
+      "family": "animals",
+      "relation": "animal_legs",
+      "template_id": 2,
+      "group_id": "duck",
+      "split": "test",
+      "hop1_prompt": "The name of the water bird that says quack is",
+      "hop2_prompt": "The number of legs on the duck is"
+    },
+    {
+      "name": "elephant-size-opposite-v1",
+      "prompt": "The opposite of the adjective describing the size of an elephant is",
+      "target": "small",
+      "intermediates": [
+        "big"
+      ],
+      "base_id": "elephant-size-opposite",
+      "family": "opposites",
+      "relation": "property_antonym",
+      "template_id": 1,
+      "group_id": "big",
+      "split": "dev",
+      "hop1_prompt": "The adjective describing the size of an elephant is",
+      "hop2_prompt": "The opposite of big is"
+    },
+    {
+      "name": "thailand-country_language-v2",
+      "prompt": "The most widely spoken language in the country with Bangkok as its capital is",
+      "target": "Thai",
+      "intermediates": [
+        "Thailand"
+      ],
+      "base_id": "thailand-country_language",
+      "family": "geography",
+      "relation": "country_language",
+      "template_id": 2,
+      "group_id": "thailand",
+      "split": "test",
+      "hop1_prompt": "The country whose capital is Bangkok is",
+      "hop2_prompt": "The most widely spoken language in Thailand is"
+    },
+    {
+      "name": "ice-opposite-v1",
+      "prompt": "The opposite of the adjective describing the temperature of ice is",
+      "target": "hot",
+      "intermediates": [
+        "cold"
+      ],
+      "base_id": "ice-opposite",
+      "family": "opposites",
+      "relation": "property_antonym",
+      "template_id": 1,
+      "group_id": "cold",
+      "split": "test",
+      "hop1_prompt": "The adjective describing the temperature of ice is",
+      "hop2_prompt": "The opposite of cold is"
+    },
+    {
+      "name": "india-country_language-v1",
+      "prompt": "The most widely spoken language of the country whose capital is New Delhi is",
+      "target": "Hindi",
+      "intermediates": [
+        "India"
+      ],
+      "base_id": "india-country_language",
+      "family": "geography",
+      "relation": "country_language",
+      "template_id": 1,
+      "group_id": "india",
+      "split": "test",
+      "hop1_prompt": "The country whose capital is New Delhi is",
+      "hop2_prompt": "The most widely spoken language in India is"
+    },
+    {
+      "name": "7-minus-3-times-2-v1",
+      "prompt": "(7 - 3) * 2 =",
+      "target": "8",
+      "intermediates": [
+        "four"
+      ],
+      "base_id": "7-minus-3-times-2",
+      "family": "arithmetic",
+      "relation": "minus_multiply",
+      "template_id": 1,
+      "group_id": "four",
+      "split": "dev",
+      "hop1_prompt": "7 - 3 =",
+      "hop2_prompt": "4 * 2 ="
+    },
+    {
+      "name": "valley-opposite-v1",
+      "prompt": "The opposite of the adjective describing the altitude of a valley floor is",
+      "target": "high",
+      "intermediates": [
+        "low"
+      ],
+      "base_id": "valley-opposite",
+      "family": "opposites",
+      "relation": "property_antonym",
+      "template_id": 1,
+      "group_id": "low",
+      "split": "test",
+      "hop1_prompt": "The adjective describing the altitude of a valley floor is",
+      "hop2_prompt": "The opposite of low is"
+    },
+    {
+      "name": "cropped-hair-opposite-v1",
+      "prompt": "The opposite of the adjective describing the length of closely cropped hair is",
+      "target": "long",
+      "intermediates": [
+        "short"
+      ],
+      "base_id": "cropped-hair-opposite",
+      "family": "opposites",
+      "relation": "property_antonym",
+      "template_id": 1,
+      "group_id": "short",
+      "split": "test",
+      "hop1_prompt": "The adjective describing the length of closely cropped hair is",
+      "hop2_prompt": "The opposite of short is"
+    },
+    {
+      "name": "bee-legs-v2",
+      "prompt": "The leg count of the striped flying insect that lives in a hive is",
+      "target": "6",
+      "intermediates": [
+        "bee"
+      ],
+      "base_id": "bee-legs",
+      "family": "animals",
+      "relation": "animal_legs",
+      "template_id": 2,
+      "group_id": "bee",
+      "split": "test",
+      "hop1_prompt": "The name of the striped flying insect that lives in a hive is",
+      "hop2_prompt": "The number of legs on the bee is"
+    },
+    {
+      "name": "desert-sand-opposite-v2",
+      "prompt": "An antonym of the word describing the condition of sand in a rainless desert is",
+      "target": "wet",
+      "intermediates": [
+        "dry"
+      ],
+      "base_id": "desert-sand-opposite",
+      "family": "opposites",
+      "relation": "property_antonym",
+      "template_id": 2,
+      "group_id": "dry",
+      "split": "test",
+      "hop1_prompt": "The adjective describing the condition of sand in a rainless desert is",
+      "hop2_prompt": "The opposite of dry is"
+    },
+    {
+      "name": "spain-country_continent-v1",
+      "prompt": "The continent containing the country whose capital is Madrid is",
+      "target": "Europe",
+      "intermediates": [
+        "Spain"
+      ],
+      "base_id": "spain-country_continent",
+      "family": "geography",
+      "relation": "country_continent",
+      "template_id": 1,
+      "group_id": "spain",
+      "split": "test",
+      "hop1_prompt": "The country whose capital is Madrid is",
+      "hop2_prompt": "The continent containing Spain is"
+    },
+    {
+      "name": "portugal-country_continent-v1",
+      "prompt": "The continent containing the country whose capital is Lisbon is",
+      "target": "Europe",
+      "intermediates": [
+        "Portugal"
+      ],
+      "base_id": "portugal-country_continent",
+      "family": "geography",
+      "relation": "country_continent",
+      "template_id": 1,
+      "group_id": "portugal",
+      "split": "test",
+      "hop1_prompt": "The country whose capital is Lisbon is",
+      "hop2_prompt": "The continent containing Portugal is"
+    },
+    {
+      "name": "penguin-legs-v1",
+      "prompt": "The number of legs on the flightless black-and-white bird of Antarctica is",
+      "target": "2",
+      "intermediates": [
+        "penguin"
+      ],
+      "base_id": "penguin-legs",
+      "family": "animals",
+      "relation": "animal_legs",
+      "template_id": 1,
+      "group_id": "penguin",
+      "split": "test",
+      "hop1_prompt": "The name of the flightless black-and-white bird of Antarctica is",
+      "hop2_prompt": "The number of legs on the penguin is"
+    },
+    {
+      "name": "spider-legs-v1",
+      "prompt": "The number of legs on the animal that spins silk webs is",
+      "target": "8",
+      "intermediates": [
+        "spider"
+      ],
+      "base_id": "spider-legs",
+      "family": "animals",
+      "relation": "animal_legs",
+      "template_id": 1,
+      "group_id": "spider",
+      "split": "dev",
+      "hop1_prompt": "The name of the animal that spins silk webs is",
+      "hop2_prompt": "The number of legs on the spider is"
+    },
+    {
+      "name": "india-country_continent-v1",
+      "prompt": "The continent containing the country whose capital is New Delhi is",
+      "target": "Asia",
+      "intermediates": [
+        "India"
+      ],
+      "base_id": "india-country_continent",
+      "family": "geography",
+      "relation": "country_continent",
+      "template_id": 1,
+      "group_id": "india",
+      "split": "test",
+      "hop1_prompt": "The country whose capital is New Delhi is",
+      "hop2_prompt": "The continent containing India is"
+    },
+    {
+      "name": "foot-plural-v1",
+      "prompt": "The plural of the noun meaning the body part that goes inside a shoe is",
+      "target": "feet",
+      "intermediates": [
+        "foot"
+      ],
+      "base_id": "foot-plural",
+      "family": "word_forms",
+      "relation": "description_plural",
+      "template_id": 1,
+      "group_id": "foot",
+      "split": "dev",
+      "hop1_prompt": "The singular noun meaning the body part that goes inside a shoe is",
+      "hop2_prompt": "The plural of foot is"
+    },
+    {
+      "name": "ant-legs-v2",
+      "prompt": "The leg count of the small insect that marches in trails to picnic food is",
+      "target": "6",
+      "intermediates": [
+        "ant"
+      ],
+      "base_id": "ant-legs",
+      "family": "animals",
+      "relation": "animal_legs",
+      "template_id": 2,
+      "group_id": "ant",
+      "split": "test",
+      "hop1_prompt": "The name of the small insect that marches in trails to picnic food is",
+      "hop2_prompt": "The number of legs on the ant is"
+    },
+    {
+      "name": "butterfly-legs-v1",
+      "prompt": "The number of legs on the colorful winged insect that develops from a caterpillar is",
+      "target": "6",
+      "intermediates": [
+        "butterfly"
+      ],
+      "base_id": "butterfly-legs",
+      "family": "animals",
+      "relation": "animal_legs",
+      "template_id": 1,
+      "group_id": "butterfly",
+      "split": "test",
+      "hop1_prompt": "The name of the colorful winged insect that develops from a caterpillar is",
+      "hop2_prompt": "The number of legs on the butterfly is"
+    },
+    {
+      "name": "mouse-plural-v2",
+      "prompt": "The plural form of the word for the small rodent that squeaks is",
+      "target": "mice",
+      "intermediates": [
+        "mouse"
+      ],
+      "base_id": "mouse-plural",
+      "family": "word_forms",
+      "relation": "description_plural",
+      "template_id": 2,
+      "group_id": "mouse",
+      "split": "test",
+      "hop1_prompt": "The singular noun meaning the small rodent that squeaks is",
+      "hop2_prompt": "The plural of mouse is"
+    },
+    {
+      "name": "argentina-country_language-v1",
+      "prompt": "The most widely spoken language of the country whose capital is Buenos Aires is",
+      "target": "Spanish",
+      "intermediates": [
+        "Argentina"
+      ],
+      "base_id": "argentina-country_language",
+      "family": "geography",
+      "relation": "country_language",
+      "template_id": 1,
+      "group_id": "argentina",
+      "split": "test",
+      "hop1_prompt": "The country whose capital is Buenos Aires is",
+      "hop2_prompt": "The most widely spoken language in Argentina is"
+    },
+    {
+      "name": "pillow-opposite-v2",
+      "prompt": "An antonym of the word describing the firmness of a fluffy pillow is",
+      "target": "hard",
+      "intermediates": [
+        "soft"
+      ],
+      "base_id": "pillow-opposite",
+      "family": "opposites",
+      "relation": "property_antonym",
+      "template_id": 2,
+      "group_id": "soft",
+      "split": "test",
+      "hop1_prompt": "The adjective describing the firmness of a fluffy pillow is",
+      "hop2_prompt": "The opposite of soft is"
+    },
+    {
+      "name": "soaked-towel-opposite-v1",
+      "prompt": "The opposite of the adjective describing the condition of a towel soaked in water is",
+      "target": "dry",
+      "intermediates": [
+        "wet"
+      ],
+      "base_id": "soaked-towel-opposite",
+      "family": "opposites",
+      "relation": "property_antonym",
+      "template_id": 1,
+      "group_id": "wet",
+      "split": "test",
+      "hop1_prompt": "The adjective describing the condition of a towel soaked in water is",
+      "hop2_prompt": "The opposite of wet is"
+    },
+    {
+      "name": "snail-opposite-v1",
+      "prompt": "The opposite of the adjective describing the speed of a snail is",
+      "target": "fast",
+      "intermediates": [
+        "slow"
+      ],
+      "base_id": "snail-opposite",
+      "family": "opposites",
+      "relation": "property_antonym",
+      "template_id": 1,
+      "group_id": "slow",
+      "split": "test",
+      "hop1_prompt": "The adjective describing the speed of a snail is",
+      "hop2_prompt": "The opposite of slow is"
+    },
+    {
+      "name": "desert-sand-opposite-v1",
+      "prompt": "The opposite of the adjective describing the condition of sand in a rainless desert is",
+      "target": "wet",
+      "intermediates": [
+        "dry"
+      ],
+      "base_id": "desert-sand-opposite",
+      "family": "opposites",
+      "relation": "property_antonym",
+      "template_id": 1,
+      "group_id": "dry",
+      "split": "test",
+      "hop1_prompt": "The adjective describing the condition of sand in a rainless desert is",
+      "hop2_prompt": "The opposite of dry is"
+    },
+    {
+      "name": "sheep-fiber-v1",
+      "prompt": "The textile fiber obtained from the farm animal that says baa is",
+      "target": "wool",
+      "intermediates": [
+        "sheep"
+      ],
+      "base_id": "sheep-fiber",
+      "family": "animals",
+      "relation": "animal_fiber",
+      "template_id": 1,
+      "group_id": "sheep",
+      "split": "dev",
+      "hop1_prompt": "The name of the farm animal that says baa is",
+      "hop2_prompt": "The textile fiber obtained from the sheep is"
+    },
+    {
+      "name": "netherlands-country_language-v2",
+      "prompt": "The most widely spoken language in the country with Amsterdam as its capital is",
+      "target": "Dutch",
+      "intermediates": [
+        "Netherlands"
+      ],
+      "base_id": "netherlands-country_language",
+      "family": "geography",
+      "relation": "country_language",
+      "template_id": 2,
+      "group_id": "netherlands",
+      "split": "test",
+      "hop1_prompt": "The country whose capital is Amsterdam is",
+      "hop2_prompt": "The most widely spoken language in Netherlands is"
+    },
+    {
+      "name": "cropped-hair-opposite-v2",
+      "prompt": "An antonym of the word describing the length of closely cropped hair is",
+      "target": "long",
+      "intermediates": [
+        "short"
+      ],
+      "base_id": "cropped-hair-opposite",
+      "family": "opposites",
+      "relation": "property_antonym",
+      "template_id": 2,
+      "group_id": "short",
+      "split": "test",
+      "hop1_prompt": "The adjective describing the length of closely cropped hair is",
+      "hop2_prompt": "The opposite of short is"
+    },
+    {
+      "name": "snake-legs-v2",
+      "prompt": "The leg count of the long reptile that hisses and slithers is",
+      "target": "0",
+      "intermediates": [
+        "snake"
+      ],
+      "base_id": "snake-legs",
+      "family": "animals",
+      "relation": "animal_legs",
+      "template_id": 2,
+      "group_id": "snake",
+      "split": "dev",
+      "hop1_prompt": "The name of the long reptile that hisses and slithers is",
+      "hop2_prompt": "The number of legs on the snake is"
+    },
+    {
+      "name": "9-minus-2-times-2-v2",
+      "prompt": "The result of multiplying (9 - 2) by 2 is",
+      "target": "14",
+      "intermediates": [
+        "seven"
+      ],
+      "base_id": "9-minus-2-times-2",
+      "family": "arithmetic",
+      "relation": "minus_multiply",
+      "template_id": 2,
+      "group_id": "seven",
+      "split": "test",
+      "hop1_prompt": "9 - 2 =",
+      "hop2_prompt": "7 * 2 ="
+    },
+    {
+      "name": "spain-country_language-v2",
+      "prompt": "The most widely spoken language in the country with Madrid as its capital is",
+      "target": "Spanish",
+      "intermediates": [
+        "Spain"
+      ],
+      "base_id": "spain-country_language",
+      "family": "geography",
+      "relation": "country_language",
+      "template_id": 2,
+      "group_id": "spain",
+      "split": "test",
+      "hop1_prompt": "The country whose capital is Madrid is",
+      "hop2_prompt": "The most widely spoken language in Spain is"
+    },
+    {
+      "name": "soaked-towel-opposite-v2",
+      "prompt": "An antonym of the word describing the condition of a towel soaked in water is",
+      "target": "dry",
+      "intermediates": [
+        "wet"
+      ],
+      "base_id": "soaked-towel-opposite",
+      "family": "opposites",
+      "relation": "property_antonym",
+      "template_id": 2,
+      "group_id": "wet",
+      "split": "test",
+      "hop1_prompt": "The adjective describing the condition of a towel soaked in water is",
+      "hop2_prompt": "The opposite of wet is"
+    },
+    {
+      "name": "shelf-plural-v2",
+      "prompt": "The plural form of the word for a horizontal board on a wall used to hold books is",
+      "target": "shelves",
+      "intermediates": [
+        "shelf"
+      ],
+      "base_id": "shelf-plural",
+      "family": "word_forms",
+      "relation": "description_plural",
+      "template_id": 2,
+      "group_id": "shelf",
+      "split": "test",
+      "hop1_prompt": "The singular noun meaning a horizontal board on a wall used to hold books is",
+      "hop2_prompt": "The plural of shelf is"
+    },
+    {
+      "name": "china-country_language-v2",
+      "prompt": "The most widely spoken language in the country with Beijing as its capital is",
+      "target": "Mandarin",
+      "intermediates": [
+        "China"
+      ],
+      "base_id": "china-country_language",
+      "family": "geography",
+      "relation": "country_language",
+      "template_id": 2,
+      "group_id": "china",
+      "split": "test",
+      "hop1_prompt": "The country whose capital is Beijing is",
+      "hop2_prompt": "The most widely spoken language in China is"
+    },
+    {
+      "name": "thailand-country_language-v1",
+      "prompt": "The most widely spoken language of the country whose capital is Bangkok is",
+      "target": "Thai",
+      "intermediates": [
+        "Thailand"
+      ],
+      "base_id": "thailand-country_language",
+      "family": "geography",
+      "relation": "country_language",
+      "template_id": 1,
+      "group_id": "thailand",
+      "split": "test",
+      "hop1_prompt": "The country whose capital is Bangkok is",
+      "hop2_prompt": "The most widely spoken language in Thailand is"
+    },
+    {
+      "name": "sweden-country_language-v2",
+      "prompt": "The most widely spoken language in the country with Stockholm as its capital is",
+      "target": "Swedish",
+      "intermediates": [
+        "Sweden"
+      ],
+      "base_id": "sweden-country_language",
+      "family": "geography",
+      "relation": "country_language",
+      "template_id": 2,
+      "group_id": "sweden",
+      "split": "dev",
+      "hop1_prompt": "The country whose capital is Stockholm is",
+      "hop2_prompt": "The most widely spoken language in Sweden is"
+    },
+    {
+      "name": "mountaintop-opposite-v2",
+      "prompt": "An antonym of the word describing the altitude of a mountaintop is",
+      "target": "low",
+      "intermediates": [
+        "high"
+      ],
+      "base_id": "mountaintop-opposite",
+      "family": "opposites",
+      "relation": "property_antonym",
+      "template_id": 2,
+      "group_id": "high",
+      "split": "dev",
+      "hop1_prompt": "The adjective describing the altitude of a mountaintop is",
+      "hop2_prompt": "The opposite of high is"
+    },
+    {
+      "name": "cow-young-v1",
+      "prompt": "The young of the farm animal that says moo is called a",
+      "target": "calf",
+      "intermediates": [
+        "cow"
+      ],
+      "base_id": "cow-young",
+      "family": "animals",
+      "relation": "animal_young",
+      "template_id": 1,
+      "group_id": "cow",
+      "split": "test",
+      "hop1_prompt": "The name of the farm animal that says moo is",
+      "hop2_prompt": "The young of the cow is called a"
+    },
+    {
+      "name": "mouse-size-opposite-v1",
+      "prompt": "The opposite of the adjective describing the size of a mouse is",
+      "target": "big",
+      "intermediates": [
+        "small"
+      ],
+      "base_id": "mouse-size-opposite",
+      "family": "opposites",
+      "relation": "property_antonym",
+      "template_id": 1,
+      "group_id": "small",
+      "split": "test",
+      "hop1_prompt": "The adjective describing the size of a mouse is",
+      "hop2_prompt": "The opposite of small is"
+    },
+    {
+      "name": "9-minus-3-times-2-v2",
+      "prompt": "The result of multiplying (9 - 3) by 2 is",
+      "target": "12",
+      "intermediates": [
+        "six"
+      ],
+      "base_id": "9-minus-3-times-2",
+      "family": "arithmetic",
+      "relation": "minus_multiply",
+      "template_id": 2,
+      "group_id": "six",
+      "split": "test",
+      "hop1_prompt": "9 - 3 =",
+      "hop2_prompt": "6 * 2 ="
+    },
+    {
+      "name": "portugal-country_language-v1",
+      "prompt": "The most widely spoken language of the country whose capital is Lisbon is",
+      "target": "Portuguese",
+      "intermediates": [
+        "Portugal"
+      ],
+      "base_id": "portugal-country_language",
+      "family": "geography",
+      "relation": "country_language",
+      "template_id": 1,
+      "group_id": "portugal",
+      "split": "test",
+      "hop1_prompt": "The country whose capital is Lisbon is",
+      "hop2_prompt": "The most widely spoken language in Portugal is"
+    },
+    {
+      "name": "8-minus-5-times-2-v1",
+      "prompt": "(8 - 5) * 2 =",
+      "target": "6",
+      "intermediates": [
+        "three"
+      ],
+      "base_id": "8-minus-5-times-2",
+      "family": "arithmetic",
+      "relation": "minus_multiply",
+      "template_id": 1,
+      "group_id": "three",
+      "split": "test",
+      "hop1_prompt": "8 - 5 =",
+      "hop2_prompt": "3 * 2 ="
+    },
+    {
+      "name": "brazil-country_continent-v1",
+      "prompt": "The continent containing the country whose capital is Brasilia is",
+      "target": "South America",
+      "intermediates": [
+        "Brazil"
+      ],
+      "base_id": "brazil-country_continent",
+      "family": "geography",
+      "relation": "country_continent",
+      "template_id": 1,
+      "group_id": "brazil",
+      "split": "dev",
+      "hop1_prompt": "The country whose capital is Brasilia is",
+      "hop2_prompt": "The continent containing Brazil is"
+    },
+    {
+      "name": "japan-country_continent-v2",
+      "prompt": "The continent where the country with Tokyo as its capital is located is",
+      "target": "Asia",
+      "intermediates": [
+        "Japan"
+      ],
+      "base_id": "japan-country_continent",
+      "family": "geography",
+      "relation": "country_continent",
+      "template_id": 2,
+      "group_id": "japan",
+      "split": "test",
+      "hop1_prompt": "The country whose capital is Tokyo is",
+      "hop2_prompt": "The continent containing Japan is"
+    },
+    {
+      "name": "doorway-opposite-v1",
+      "prompt": "The opposite of the adjective describing a door swung wide to let people through is",
+      "target": "closed",
+      "intermediates": [
+        "open"
+      ],
+      "base_id": "doorway-opposite",
+      "family": "opposites",
+      "relation": "property_antonym",
+      "template_id": 1,
+      "group_id": "open",
+      "split": "dev",
+      "hop1_prompt": "The adjective describing a door swung wide to let people through is",
+      "hop2_prompt": "The opposite of open is"
+    },
+    {
+      "name": "stone-opposite-v2",
+      "prompt": "An antonym of the word describing the firmness of a stone is",
+      "target": "soft",
+      "intermediates": [
+        "hard"
+      ],
+      "base_id": "stone-opposite",
+      "family": "opposites",
+      "relation": "property_antonym",
+      "template_id": 2,
+      "group_id": "hard",
+      "split": "test",
+      "hop1_prompt": "The adjective describing the firmness of a stone is",
+      "hop2_prompt": "The opposite of hard is"
+    },
+    {
+      "name": "horse-sound-v2",
+      "prompt": "The characteristic call of the farm animal ridden by jockeys is a",
+      "target": "neigh",
+      "intermediates": [
+        "horse"
+      ],
+      "base_id": "horse-sound",
+      "family": "animals",
+      "relation": "animal_sound",
+      "template_id": 2,
+      "group_id": "horse",
+      "split": "test",
+      "hop1_prompt": "The name of the farm animal ridden by jockeys is",
+      "hop2_prompt": "The characteristic sound made by the horse is a"
+    },
+    {
+      "name": "5-plus-6-times-2-v2",
+      "prompt": "The result of multiplying (5 + 6) by 2 is",
+      "target": "22",
+      "intermediates": [
+        "eleven"
+      ],
+      "base_id": "5-plus-6-times-2",
+      "family": "arithmetic",
+      "relation": "plus_multiply",
+      "template_id": 2,
+      "group_id": "eleven",
+      "split": "test",
+      "hop1_prompt": "5 + 6 =",
+      "hop2_prompt": "11 * 2 ="
+    },
+    {
+      "name": "netherlands-country_continent-v1",
+      "prompt": "The continent containing the country whose capital is Amsterdam is",
+      "target": "Europe",
+      "intermediates": [
+        "Netherlands"
+      ],
+      "base_id": "netherlands-country_continent",
+      "family": "geography",
+      "relation": "country_continent",
+      "template_id": 1,
+      "group_id": "netherlands",
+      "split": "test",
+      "hop1_prompt": "The country whose capital is Amsterdam is",
+      "hop2_prompt": "The continent containing Netherlands is"
+    },
+    {
+      "name": "4-plus-5-times-2-v2",
+      "prompt": "The result of multiplying (4 + 5) by 2 is",
+      "target": "18",
+      "intermediates": [
+        "nine"
+      ],
+      "base_id": "4-plus-5-times-2",
+      "family": "arithmetic",
+      "relation": "plus_multiply",
+      "template_id": 2,
+      "group_id": "nine",
+      "split": "dev",
+      "hop1_prompt": "4 + 5 =",
+      "hop2_prompt": "9 * 2 ="
+    },
+    {
+      "name": "greece-country_continent-v2",
+      "prompt": "The continent where the country with Athens as its capital is located is",
+      "target": "Europe",
+      "intermediates": [
+        "Greece"
+      ],
+      "base_id": "greece-country_continent",
+      "family": "geography",
+      "relation": "country_continent",
+      "template_id": 2,
+      "group_id": "greece",
+      "split": "test",
+      "hop1_prompt": "The country whose capital is Athens is",
+      "hop2_prompt": "The continent containing Greece is"
+    },
+    {
+      "name": "france-country_continent-v1",
+      "prompt": "The continent containing the country whose capital is Paris is",
+      "target": "Europe",
+      "intermediates": [
+        "France"
+      ],
+      "base_id": "france-country_continent",
+      "family": "geography",
+      "relation": "country_continent",
+      "template_id": 1,
+      "group_id": "france",
+      "split": "dev",
+      "hop1_prompt": "The country whose capital is Paris is",
+      "hop2_prompt": "The continent containing France is"
+    },
+    {
+      "name": "glass-opposite-v1",
+      "prompt": "The opposite of the adjective describing a glass filled to the brim is",
+      "target": "empty",
+      "intermediates": [
+        "full"
+      ],
+      "base_id": "glass-opposite",
+      "family": "opposites",
+      "relation": "property_antonym",
+      "template_id": 1,
+      "group_id": "full",
+      "split": "test",
+      "hop1_prompt": "The adjective describing a glass filled to the brim is",
+      "hop2_prompt": "The opposite of full is"
+    },
+    {
+      "name": "foot-plural-v2",
+      "prompt": "The plural form of the word for the body part that goes inside a shoe is",
+      "target": "feet",
+      "intermediates": [
+        "foot"
+      ],
+      "base_id": "foot-plural",
+      "family": "word_forms",
+      "relation": "description_plural",
+      "template_id": 2,
+      "group_id": "foot",
+      "split": "dev",
+      "hop1_prompt": "The singular noun meaning the body part that goes inside a shoe is",
+      "hop2_prompt": "The plural of foot is"
+    },
+    {
+      "name": "horse-sound-v1",
+      "prompt": "The characteristic sound made by the farm animal ridden by jockeys is a",
+      "target": "neigh",
+      "intermediates": [
+        "horse"
+      ],
+      "base_id": "horse-sound",
+      "family": "animals",
+      "relation": "animal_sound",
+      "template_id": 1,
+      "group_id": "horse",
+      "split": "test",
+      "hop1_prompt": "The name of the farm animal ridden by jockeys is",
+      "hop2_prompt": "The characteristic sound made by the horse is a"
+    },
+    {
+      "name": "life-plural-v1",
+      "prompt": "The plural of the noun meaning the state of being alive is",
+      "target": "lives",
+      "intermediates": [
+        "life"
+      ],
+      "base_id": "life-plural",
+      "family": "word_forms",
+      "relation": "description_plural",
+      "template_id": 1,
+      "group_id": "life",
+      "split": "test",
+      "hop1_prompt": "The singular noun meaning the state of being alive is",
+      "hop2_prompt": "The plural of life is"
+    },
+    {
+      "name": "shut-door-opposite-v2",
+      "prompt": "An antonym of the word describing a door that has been shut is",
+      "target": "open",
+      "intermediates": [
+        "closed"
+      ],
+      "base_id": "shut-door-opposite",
+      "family": "opposites",
+      "relation": "property_antonym",
+      "template_id": 2,
+      "group_id": "closed",
+      "split": "test",
+      "hop1_prompt": "The adjective describing a door that has been shut is",
+      "hop2_prompt": "The opposite of closed is"
+    },
+    {
+      "name": "argentina-country_continent-v1",
+      "prompt": "The continent containing the country whose capital is Buenos Aires is",
+      "target": "South America",
+      "intermediates": [
+        "Argentina"
+      ],
+      "base_id": "argentina-country_continent",
+      "family": "geography",
+      "relation": "country_continent",
+      "template_id": 1,
+      "group_id": "argentina",
+      "split": "test",
+      "hop1_prompt": "The country whose capital is Buenos Aires is",
+      "hop2_prompt": "The continent containing Argentina is"
+    },
+    {
+      "name": "shut-door-opposite-v1",
+      "prompt": "The opposite of the adjective describing a door that has been shut is",
+      "target": "open",
+      "intermediates": [
+        "closed"
+      ],
+      "base_id": "shut-door-opposite",
+      "family": "opposites",
+      "relation": "property_antonym",
+      "template_id": 1,
+      "group_id": "closed",
+      "split": "test",
+      "hop1_prompt": "The adjective describing a door that has been shut is",
+      "hop2_prompt": "The opposite of closed is"
+    },
+    {
+      "name": "mouse-plural-v1",
+      "prompt": "The plural of the noun meaning the small rodent that squeaks is",
+      "target": "mice",
+      "intermediates": [
+        "mouse"
+      ],
+      "base_id": "mouse-plural",
+      "family": "word_forms",
+      "relation": "description_plural",
+      "template_id": 1,
+      "group_id": "mouse",
+      "split": "test",
+      "hop1_prompt": "The singular noun meaning the small rodent that squeaks is",
+      "hop2_prompt": "The plural of mouse is"
+    },
+    {
+      "name": "cat-young-v1",
+      "prompt": "The young of the domestic animal that says meow is called a",
+      "target": "kitten",
+      "intermediates": [
+        "cat"
+      ],
+      "base_id": "cat-young",
+      "family": "animals",
+      "relation": "animal_young",
+      "template_id": 1,
+      "group_id": "cat",
+      "split": "test",
+      "hop1_prompt": "The name of the domestic animal that says meow is",
+      "hop2_prompt": "The young of the cat is called a"
+    },
+    {
+      "name": "tooth-plural-v1",
+      "prompt": "The plural of the noun meaning one of the hard white structures used for biting is",
+      "target": "teeth",
+      "intermediates": [
+        "tooth"
+      ],
+      "base_id": "tooth-plural",
+      "family": "word_forms",
+      "relation": "description_plural",
+      "template_id": 1,
+      "group_id": "tooth",
+      "split": "test",
+      "hop1_prompt": "The singular noun meaning one of the hard white structures used for biting is",
+      "hop2_prompt": "The plural of tooth is"
+    },
+    {
+      "name": "2-plus-3-times-2-v2",
+      "prompt": "The result of multiplying (2 + 3) by 2 is",
+      "target": "10",
+      "intermediates": [
+        "five"
+      ],
+      "base_id": "2-plus-3-times-2",
+      "family": "arithmetic",
+      "relation": "plus_multiply",
+      "template_id": 2,
+      "group_id": "five",
+      "split": "test",
+      "hop1_prompt": "2 + 3 =",
+      "hop2_prompt": "5 * 2 ="
+    },
+    {
+      "name": "feather-opposite-v2",
+      "prompt": "An antonym of the word describing the weight of a feather is",
+      "target": "heavy",
+      "intermediates": [
+        "light"
+      ],
+      "base_id": "feather-opposite",
+      "family": "opposites",
+      "relation": "property_antonym",
+      "template_id": 2,
+      "group_id": "light",
+      "split": "dev",
+      "hop1_prompt": "The adjective describing the weight of a feather is",
+      "hop2_prompt": "The opposite of light is"
+    }
+  ]
+}

@@ -1,6 +1,8 @@
 # Evaluations
 
-Six prompt distributions used to evaluate lens quality (§methods-comparison). Each `{slug}.json` is prompts only.
+Six original prompt distributions used to evaluate lens quality (§methods-comparison),
+plus an easy multihop candidate set for smaller models. Each `{slug}.json` contains
+prompts and annotations, not model activations or fitted artifacts.
 
 ## Conventions
 
@@ -60,6 +62,52 @@ optimistic-tie/prefix-target result caches; see
 [`lens-eval-multihop.json`](lens-eval-multihop.json)
 
 Lens-quality eval (§methods-comparison). `items[*]` has `prompt` and `intermediates`. `target` defines the readout position only and is not itself scored. Readout is at a single position — the token immediately preceding `target` — across all layers. Metric: pass@k = mean over items of the fraction of `intermediates` whose min-over-layers lens rank ≤ k.
+
+## lens-eval-multihop-easy
+
+[`lens-eval-multihop-easy.json`](lens-eval-multihop-easy.json), reproducibly built by
+the executed [construction notebook](../../notebooks/model_agnostic/multihop_easy/multihop_easy_build.ipynb).
+
+**Unfiltered candidates, not demonstrated small-model results.** There are 100
+base items with two phrasings each: 32 geography, 20 animal, 20 opposite, 12
+word-form, and 16 arithmetic items. Natural-language prompts request a final
+property before describing the hidden bridge, avoiding the explicit
+`company from → country` continuation slot in latent-bridge v2. Arithmetic items
+ask for the product of an unevaluated sum or difference. Both the bridge and
+answer labels are absent as whole words/numbers from the evaluation prompt.
+These checks do not establish the absence of semantic shortcuts or predictable
+bridge continuations at other positions.
+
+Use the same intermediate-rank protocol as `multihop`: read **the final prompt
+token** under both lenses, with the same layer range, and compare paired pass@k
+curves/AUC and ranks. Final-answer correctness is an optional eligibility
+diagnostic, not the lens-quality score. The set was not selected using either
+lens. All 200 prompts have `name`, `prompt`, `target`, and `intermediates` fields;
+each item annotates exactly one intermediate. `hop1_prompt` and `hop2_prompt` are
+separate eligibility diagnostics, never evaluation context.
+
+`base_id` groups paraphrases; average them before averaging base items. Report
+per-family results and an equal-family macro average. `group_id` groups shared
+bridge labels across phrasings and relations; use it for clustered uncertainty
+and the supplied deterministic `dev`/`test` split. These splits are for choosing
+evaluation settings, not lens fitting. Animal descriptions use familiar
+prototypes, and some antonyms have alternative valid answers. Canonical labels
+do not introduce new alias rules: in particular, this dataset name does not
+activate the `order-ops` number-word expansion. Arithmetic intermediates use
+number words so that they have whole-token spellings under both GPT-2 and
+Qwen3-0.6B; their targets use digits. The executed notebook confirms coverage of
+all 200 intermediate annotations for both tokenizers. Canonical targets have
+coverage of 196/200 for GPT-2 and 168/200 for Qwen (multi-token numerals and/or
+`South America` account for the gaps). Unsupported labels should remain
+unscored, with coverage reported, rather than scored by a token prefix.
+
+Load it with `load_eval(REPO_DIR, "multihop-easy")`. To evaluate it in the
+model-agnostic dataset notebook, set
+`evals = {"multihop-easy": load_eval(REPO_DIR, "multihop-easy")}` in its dataset
+loading cell. The original default `DATASETS` list is unchanged. Existing
+evaluators ignore the extra metadata; join grouping fields back by item name
+for grouped reporting. The fixed item order ensures the legacy half-list-offset
+control has a different bridge, but that control is not family-matched.
 
 ## lens-eval-multilingual
 
