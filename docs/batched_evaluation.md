@@ -350,7 +350,8 @@ Custom spelling callables are still trusted and must not incorporate glossary
 translations. The one exception is the separate, opt-in cross-lingual protocol
 `jlens.translated_scoring.TranslatedSpellings`, whose results are reported next
 to strict results, never in their place (see
-`notebooks/jacobian_lens_prefitted/qwen35_9b_lens_translated.ipynb`). The original non-softcapped smoke checked prediction ranks against
+`notebooks/qwen-9B/qwen35_9b_lens_translated.ipynb`).
+The original non-softcapped smoke checked prediction ranks against
 direct logit comparisons and observed final rank 1; that observation is not a
 general guarantee. The softcap regression in `tests/test_readout_ranking.py`
 checks deterministic pre-softcap ranks and a final `model_prediction_ranks`
