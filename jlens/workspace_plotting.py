@@ -1,4 +1,4 @@
-"""Workspace CKA controls and figure export, independent of measurement caches."""
+"""Workspace figure export, independent of measurement caches."""
 
 from __future__ import annotations
 
@@ -7,78 +7,8 @@ import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-import numpy as np
-import pandas as pd
-
-from jlens.workspace_layers import LayerGeometry
-
 if TYPE_CHECKING:
     from matplotlib.figure import Figure
-
-
-def logit_lens_geometry(geometry: LayerGeometry, *, final_layer: int) -> LayerGeometry:
-    """Derive the exact fixed-unembedding control from the final J-lens row.
-
-    ``workspace_geometry`` uses identity transport at the final block. Thus its
-    final geometry is exactly that of the logit lens, whose vectors are ``W_U``
-    at every block. Nondegenerate linear CKA is one for every pair; the PCA
-    dimension fractions equal the final row at every layer. No fitting, forward
-    passes, vocabulary allocations, or eigendecompositions are needed. This
-    measures vector geometry, not CKA between context-dependent activations.
-    """
-    if not geometry.layers or geometry.layers[-1] != final_layer:
-        raise ValueError("Geometry must include the model's final block")
-    n = len(geometry.layers)
-    if geometry.cka.shape != (n, n):
-        raise ValueError("CKA shape must match selected layers")
-    final_self = geometry.cka[-1, -1]
-    if not np.isnan(final_self) and not np.isclose(final_self, 1, atol=2e-5):
-        raise ValueError("Final CKA must be unit self-similarity or undefined")
-    final_dimensions = geometry.dimensions.query("layer == @final_layer")
-    if final_dimensions.empty:
-        raise ValueError("Geometry lacks final-layer dimension fractions")
-    dimensions = pd.concat(
-        [final_dimensions.assign(layer=layer) for layer in geometry.layers],
-        ignore_index=True,
-    )
-    # A constant/zero unembedding has undefined CKA, not perfect alignment.
-    cka = np.full((n, n), np.nan if np.isnan(final_self) else 1.0)
-    return LayerGeometry(list(geometry.layers), cka, dimensions)
-
-
-def plot_cka_comparison(
-    geometry: LayerGeometry, *, n_layers: int, title: str
-) -> Figure:
-    """Compare J-lens and fixed-unembedding logit-lens CKA on one color scale."""
-    import matplotlib.pyplot as plt
-
-    control = logit_lens_geometry(geometry, final_layer=n_layers - 1)
-    figure, axes = plt.subplots(1, 2, figsize=(11, 5), layout="constrained")
-    ticks = np.unique(
-        np.linspace(0, len(geometry.layers) - 1, min(6, len(geometry.layers))).astype(
-            int
-        )
-    )
-    labels = [f"{100 * geometry.layers[i] / max(n_layers - 1, 1):.0f}" for i in ticks]
-    for ax, result, name in zip(
-        axes,
-        (geometry, control),
-        ("J-lens", "Logit lens (fixed unembedding)"),
-        strict=True,
-    ):
-        image = ax.imshow(result.cka, origin="lower", cmap="viridis", vmin=0, vmax=1)
-        ax.set(
-            xticks=ticks,
-            xticklabels=labels,
-            yticks=ticks,
-            yticklabels=labels,
-            xlabel="Layer (reindexed 0–100)",
-            ylabel="Layer (reindexed 0–100)",
-            title=name,
-        )
-    figure.colorbar(image, ax=list(axes), label="CKA similarity", shrink=0.8)
-    figure.suptitle(f"Centered kernel alignment of lens vectors\n{title}")
-    return figure
 
 
 def save_workspace_figure(
