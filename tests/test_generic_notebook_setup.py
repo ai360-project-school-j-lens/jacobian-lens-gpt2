@@ -23,7 +23,7 @@ from jlens.notebook_setup import (
 from tests.test_generic_evaluation import NativeTokenizer
 
 NOTEBOOK = (Path(__file__).resolve().parents[1]
-            / "notebooks/jacobian_lens/model_agnostic_lens_dataset.ipynb")
+            / "notebooks/model_agnostic/model_agnostic_lens_dataset.ipynb")
 CELLS = {c.id: c.source for c in nbformat.read(NOTEBOOK, as_version=4).cells}
 
 

@@ -15,7 +15,7 @@ from jlens.readout_cache import item_scores
 def analysis(tmp_path):
     path = (
         Path(__file__).resolve().parents[1]
-        / "notebooks/jacobian_lens/fit_convergence_ci.ipynb"
+        / "notebooks/gpt2-xl/jacobian_lens/fit_convergence_ci.ipynb"
     )
     cells = json.loads(path.read_text())["cells"]
     source = next(

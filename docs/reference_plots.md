@@ -1,7 +1,7 @@
 # Reference-style plot adaptations
 
 The **§8** section of
-`notebooks/jacobian_lens/jacobian_logit_lens_dataset.ipynb` provides adaptations
+`notebooks/gpt2-xl/jacobian_lens/jacobian_logit_lens_dataset.ipynb` provides adaptations
 of reference Figures 52/55/56. They are not numerical reproductions: model,
 fitted lens, tokenizer, evaluation samples and held-out corpus differ. Original
 sample subsets and symmetric-KL normalization are unknown. There is no tuned

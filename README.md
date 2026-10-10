@@ -89,12 +89,12 @@ Reading a slice page:
 
 ## Dataset comparison notebooks
 
-[model_agnostic_lens_dataset.ipynb](notebooks/jacobian_lens/model_agnostic_lens_dataset.ipynb)
+[model_agnostic_lens_dataset.ipynb](notebooks/model_agnostic/model_agnostic_lens_dataset.ipynb)
 keeps an explicit handwritten logit lens and compares it with the J-lens
 using one set of recorded activations per prompt. It uses `LensModel` and
 `from_hf`, defaults to Qwen2.5-0.5B, and retains the full dataset metrics.
 
-The [GPT-2 comparison](notebooks/jacobian_lens/jacobian_logit_lens_dataset.ipynb)
+The [GPT-2 comparison](notebooks/gpt2-xl/jacobian_lens/jacobian_logit_lens_dataset.ipynb)
 and the model-agnostic notebook support dimension-batch benchmarks and
 `FIT_MODE="sharded"`. Sharded fitting loads one model per worker, fits
 disjoint prompt shards with separate checkpoints, and calls

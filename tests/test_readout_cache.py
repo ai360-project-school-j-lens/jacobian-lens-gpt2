@@ -212,7 +212,7 @@ def test_readout_cache_records_scoring_version(tmp_path):
 ])
 def test_notebook_derived_caches_use_scoring_version(notebook, artifacts):
     path = (
-        Path(__file__).resolve().parents[1] / "notebooks" / "jacobian_lens"
+        Path(__file__).resolve().parents[1] / "notebooks" / "gpt2-xl" / "jacobian_lens"
         / f"{notebook}.ipynb"
     )
     cells = json.loads(path.read_text())["cells"]
