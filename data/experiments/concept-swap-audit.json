@@ -1,0 +1,56 @@
+{
+  "review_date": "2026-10-11",
+  "task_data_audit": "token-swap-audit.json",
+  "probe_templates_file": "concept-probe-templates.json",
+  "probe_templates_sha256": "76fe0d6dab9d9009970ccc4bec61f328712065b07f0566faea5ea4deaf2996a2",
+  "existing_implementations": [
+    {
+      "notebook": "notebooks/gpt2-xl/jacobian_lens/concept_swap.ipynb",
+      "representation": "Mean residual at the explicitly named concept token across 20 templates, minus the mean across concepts.",
+      "trained_classifier": false,
+      "held_out_template_check": false
+    },
+    {
+      "notebook": "notebooks/gpt2-xl/latent_bridge_v2/latent_bridge_v2_swap.ipynb",
+      "representation": "Same mean-difference probe; task subjects preselected for GPT-2 XL.",
+      "trained_classifier": false,
+      "held_out_template_check": false
+    },
+    {
+      "notebook": "notebooks/qwen3-4b/jacobian_lens_prefitted/concept_swap.ipynb",
+      "representation": "J-token, logit-token and random directions; no learned-probe arm.",
+      "trained_classifier": false,
+      "held_out_template_check": false
+    }
+  ],
+  "findings": [
+    "All 20 templates explicitly name the concept; they are lexical contexts, not evidence that the concept is represented implicitly.",
+    "Only the causal prefix through the concept can affect its activation. Suffix-only template variants must not cross train/test splits.",
+    "The local templates are reusable training contexts, not Anthropic's implied-intermediate probe training prompts.",
+    "No exact template-filled prompt overlaps the task prompts. This lexical non-overlap is weaker than semantic independence.",
+    "Task answers and swap outcomes are not probe-training labels. Classes are concept names.",
+    "The Qwen notebook records single-token flags but its correct_trials filter does not enforce them; first-token concept fallbacks can enter its swaps.",
+    "The legacy claim that vector scale does not matter is too broad: a common scale cancels, but different source and target rescalings change the swap."
+  ],
+  "new_protocol": {
+    "methods": [
+      "mean difference (legacy formula)",
+      "ridge-regularized linear concept classifier"
+    ],
+    "templates": 20,
+    "training_templates": 15,
+    "held_out_templates": 5,
+    "split_seed": 0,
+    "readout": "Last token of the complete concept mention, located with character offsets and checked against model encoding.",
+    "cohorts": [
+      "matched single-token concepts: learned probes, J, logit and matched random controls",
+      "additional multi-token concepts: learned probes and their matched random controls only"
+    ],
+    "limitations": [
+      "Held-out-template accuracy measures explicitly named concepts, not latent semantic decoding.",
+      "Classifier directions are readout covectors used experimentally as write directions; classification accuracy does not establish causal usefulness.",
+      "This is not the paper's sparse J-space/remainder decomposition experiment.",
+      "Direction norms are preserved; each learned arm has a separate random control matched to its actual per-layer, per-position perturbation norm."
+    ]
+  }
+}

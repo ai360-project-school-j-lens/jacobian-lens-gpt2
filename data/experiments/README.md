@@ -50,6 +50,15 @@ An easier two-hop set for small models, in the `probe-swap` item format. 100 wel
 
 20 neutral `templates` with an `{x}` slot ("Let me tell you about {x}.") for building concept probe directions without touching test prompts. Each template is filled with every concept of a swap set; the residual stream is read at the concept token (single-token concepts, `{x}` always preceded by a space). The difference-of-means direction for concept c at a layer is its mean over templates minus the mean over all concepts. `notebooks/gpt2-xl/jacobian_lens/concept_swap.ipynb` uses these directions as the `probe` swap mode for `probe-swap`, `latent-bridge`, and `flexible-generalization`.
 
+The [model-agnostic concept-swap notebook](../../notebooks/model_agnostic/concept_swap/model_agnostic_concept_swap.ipynb)
+compares that mean-difference estimator with a fitted ridge linear classifier,
+using 15 training and 5 held-out templates. It locates complete concept mentions
+with tokenizer offsets and supports multi-token concepts in a separate cohort.
+These templates explicitly name concepts: held-out accuracy measures recognition
+across contexts, not latent semantic decoding. The
+[`concept-swap-audit.json`](concept-swap-audit.json) records the implementation
+review, template provenance, and limits; task filtering reuses the token-swap audit.
+
 ## verbal-introspection
 
 [`verbal-introspection.json`](verbal-introspection.json)

@@ -6,6 +6,7 @@ import hashlib
 import json
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 
 import pandas as pd
@@ -22,6 +23,14 @@ from jlens.workspace import (
     final_norm_centers,
     final_norm_gain,
 )
+
+
+@dataclass
+class ConceptDirections:
+    """Per-layer residual directions, ordered by concept label, with no token fallback."""
+
+    concepts: tuple[str, ...]
+    vectors: dict[int, torch.Tensor]
 
 
 def load_swap_trials(root: str | Path) -> pd.DataFrame:
@@ -72,12 +81,15 @@ def load_swap_trials(root: str | Path) -> pd.DataFrame:
 
 
 def prepare_swap_trials(model: LensModel, trials: pd.DataFrame, *,
-                        max_length: int = 256) -> pd.DataFrame:
+                        max_length: int = 256,
+                        require_single_token_concepts: bool = True) -> pd.DataFrame:
     """Audit complete tokens, disjoint answers, and prompt truncation per model.
 
     Concepts prefer the exact leading-space spelling, then exact bare spelling.
     Answers accept complete case/space variants; fragments are never accepted.
-    Prompt encoding uses the adapter's own special-token policy.
+    Prompt encoding uses the adapter's own special-token policy. Set
+    ``require_single_token_concepts=False`` for learned-concept-only cohorts;
+    answer coverage and disjointness still apply.
     """
     tokenizer = model.tokenizer
     specials = set(getattr(tokenizer, "all_special_ids", []) or [])
@@ -110,9 +122,9 @@ def prepare_swap_trials(model: LensModel, trials: pd.DataFrame, *,
         source, target = concepts[row["source"]], concepts[row["target"]]
         original, swapped = answers[row["answer"]], answers[row["swap_answer"]]
         ids = prompts[row["prompt"]]
-        if source is None or target is None:
+        if require_single_token_concepts and (source is None or target is None):
             reasons.append("multi-token or invalid concept")
-        elif source == target:
+        elif require_single_token_concepts and source == target:
             reasons.append("identical concept tokens")
         if not original or not swapped:
             reasons.append("answer has no complete single-token spelling")
@@ -216,13 +228,18 @@ def _score(logits, answer_ids):
 def run_swap_experiment(model: LensModel, lens: JacobianLens, trials: pd.DataFrame, *,
                         bands: Mapping[str, Sequence[int]] | None = None,
                         alphas: Sequence[float] = (0.0, 1.0, 2.0), batch_size: int = 16,
-                        seed: int = 0, progress: bool = True) -> pd.DataFrame:
-    """Batch prompts, record clean states once per batch, and compare three arms.
+                        seed: int = 0, progress: bool = True,
+                        concept_directions: Mapping[str, ConceptDirections] | None = None,
+                        token_controls: bool = True) -> pd.DataFrame:
+    """Batch prompts and compare token directions and/or learned concept directions.
 
     Mask-capable adapters use right padding; other protocols use exact-length
     batches. Final logits come from unembedding the last real token's final
     block output. BOS, EOS, and other special tokens are never patched.
     All eligible trials are retained; analysis conditions on clean correctness.
+    Each learned arm gets its own ``random_<arm>`` norm-matched control.
+    With ``token_controls=False``, token IDs are unused and multi-token concepts
+    can be evaluated through their learned vectors alone.
     """
     if batch_size < 1:
         raise ValueError("batch_size must be positive")
@@ -239,14 +256,43 @@ def run_swap_experiment(model: LensModel, lens: JacobianLens, trials: pd.DataFra
     rows = trials[trials.eligible].to_dict("records")
     if not rows:
         return pd.DataFrame()
-    head = _module(model, "_lm_head", "lm_head")
-    device = getattr(model, "input_device", head.weight.device)
-    concepts = sorted({int(row[key]) for row in rows for key in ("source_id", "target_id")})
-    concept_index = {token: index for index, token in enumerate(concepts)}
-    directions = final_norm_gain(model) * head.weight[concepts].float()
-    if final_norm_centers(model):
-        directions -= directions.mean(dim=-1, keepdim=True)
-    vectors = {layer: directions @ _jacobian_on(lens, layer, directions.device) for layer in layers}
+    head = _module(model, "_lm_head", "lm_head") if token_controls else None
+    device = getattr(model, "input_device", None)
+    if device is None:
+        device = model.encode(rows[0]["prompt"]).device
+    concept_directions = dict(concept_directions or {})
+    if not token_controls and not concept_directions:
+        raise ValueError("Need token controls or at least one learned concept arm")
+    labels = sorted({row[key] for row in rows for key in ("source", "target")})
+    label_index = {label: index for index, label in enumerate(labels)}
+    vector_tables = {}
+    if token_controls:
+        tokens = sorted({int(row[key]) for row in rows for key in ("source_id", "target_id")})
+        token_index = {token: index for index, token in enumerate(tokens)}
+        directions = final_norm_gain(model) * head.weight[tokens].float()
+        if final_norm_centers(model):
+            directions -= directions.mean(dim=-1, keepdim=True)
+        vector_tables["J"] = {
+            layer: directions @ _jacobian_on(lens, layer, directions.device) for layer in layers
+        }
+        vector_tables["logit"] = dict.fromkeys(layers, directions)
+    for name, supplied in concept_directions.items():
+        if name in {"J", "logit", "random"} or name.startswith("random_"):
+            raise ValueError(f"Reserved concept arm name: {name}")
+        if len(set(supplied.concepts)) != len(supplied.concepts):
+            raise ValueError(f"Duplicate concept labels in {name}")
+        if not set(labels).issubset(supplied.concepts) or not set(layers).issubset(supplied.vectors):
+            raise ValueError(f"Missing concept or layer coverage in {name}")
+        selected = [supplied.concepts.index(label) for label in labels]
+        vector_tables[name] = {}
+        for layer in layers:
+            matrix = supplied.vectors[layer]
+            if matrix.shape != (len(supplied.concepts), model.d_model) or not torch.isfinite(matrix).all():
+                raise ValueError(f"Invalid direction matrix for {name}, layer {layer}")
+            vector_tables[name][layer] = matrix[selected].to(device=device, dtype=torch.float32)
+    arms = [("J", None), ("logit", None), ("random", "J")] if token_controls else []
+    for name in concept_directions:
+        arms.extend([(name, None), (f"random_{name}", name)])
     padded = bool(getattr(model, "supports_attention_mask", False))
     groups = defaultdict(list)
     for row in rows:
@@ -288,28 +334,34 @@ def run_swap_experiment(model: LensModel, lens: JacobianLens, trials: pd.DataFra
             baseline = logits_of(recorder)
         base_top, base_correct, _, _ = _score(baseline, [row["answer_ids"] for row in batch])
         _, _, base_rank, base_prob = _score(baseline, [row["swap_answer_ids"] for row in batch])
-        pair_indices = torch.tensor([[concept_index[int(row[key])] for key in ("source_id", "target_id")]
-                                     for row in batch], device=directions.device)
-        all_bases = {layer: vectors[layer][pair_indices].transpose(1, 2) for layer in layers}
-        logit_basis = directions[pair_indices].transpose(1, 2)
-        # A rank-deficient pair cannot represent two independently swappable coordinates.
-        if any(bool((torch.linalg.matrix_rank(basis) < 2).any()) for basis in all_bases.values()):
-            raise ValueError("Degenerate J-space token pair; cannot exchange two coordinates")
-        if bool((torch.linalg.matrix_rank(logit_basis) < 2).any()):
-            raise ValueError("Degenerate logit-space token pair")
+        label_pairs = torch.tensor([[label_index[row[key]] for key in ("source", "target")]
+                                    for row in batch], device=device)
+        if token_controls:
+            token_pairs = torch.tensor([[token_index[int(row[key])] for key in ("source_id", "target_id")]
+                                        for row in batch], device=head.weight.device)
+        bases_by_arm = {}
+        for mode, tables in vector_tables.items():
+            pairs = token_pairs if mode in {"J", "logit"} else label_pairs
+            bases_by_arm[mode] = {
+                layer: tables[layer][pairs.to(tables[layer].device)].transpose(1, 2) for layer in layers
+            }
+            # A rank-deficient pair cannot carry two independently swapped coordinates.
+            if any(bool((torch.linalg.matrix_rank(basis) < 2).any()) for basis in bases_by_arm[mode].values()):
+                raise ValueError(f"Degenerate {mode} concept pair; cannot exchange two coordinates")
         for band_name, band in bands.items():
             for alpha in alphas:
-                j_norms = None
-                for mode in ("J", "logit", "random"):
-                    bases = {layer: logit_basis if mode == "logit" else all_bases[layer] for layer in band}
+                update_norms = {}
+                for mode, random_reference in arms:
+                    basis_mode = random_reference or mode
+                    bases = {layer: bases_by_arm[basis_mode][layer] for layer in band}
                     with BatchedSwap(model, bases, clean, positions, alpha=alpha,
-                                     random_norms=j_norms if mode == "random" and alpha else None,
+                                     random_norms=update_norms[random_reference] if random_reference and alpha else None,
                                      seed=seed + batch_number) as intervention:
                         with ActivationRecorder(model.layers, at=[model.n_layers - 1]) as recorder:
                             forward()
                             logits = logits_of(recorder)
-                    if mode == "J":
-                        j_norms = intervention.update_norms
+                    if random_reference is None:
+                        update_norms[mode] = intervention.update_norms
                     top, success, rank, probability = _score(logits, [row["swap_answer_ids"] for row in batch])
                     changed = top != base_top
                     values = torch.stack([base_top, base_correct, base_rank, base_prob,
@@ -327,7 +379,8 @@ def run_swap_experiment(model: LensModel, lens: JacobianLens, trials: pd.DataFra
     return pd.DataFrame(output)
 
 
-def experiment_fingerprint(metadata: dict, prepared: pd.DataFrame, lens: JacobianLens) -> str:
+def experiment_fingerprint(metadata: dict, prepared: pd.DataFrame, lens: JacobianLens, *,
+                           concept_directions: Mapping[str, ConceptDirections] | None = None) -> str:
     """Hash runtime/config, exact tokenized trials, implementation and lens bytes."""
     digest = hashlib.sha256(json.dumps(metadata, sort_keys=True).encode())
     digest.update(prepared.to_json(orient="records").encode())
@@ -336,4 +389,9 @@ def experiment_fingerprint(metadata: dict, prepared: pd.DataFrame, lens: Jacobia
     for layer, matrix in sorted(lens.jacobians.items()):
         digest.update(str(layer).encode())
         digest.update(matrix.detach().cpu().contiguous().numpy().tobytes())
+    for name, supplied in sorted((concept_directions or {}).items()):
+        digest.update(json.dumps([name, supplied.concepts]).encode())
+        for layer, matrix in sorted(supplied.vectors.items()):
+            digest.update(str(layer).encode())
+            digest.update(matrix.detach().cpu().float().contiguous().numpy().tobytes())
     return digest.hexdigest()[:20]
