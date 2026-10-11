@@ -6,8 +6,12 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 
+import matplotlib.pyplot as plt
 import nbformat
+import numpy as np
+import pandas as pd
 import pytest
+from transformers import Gemma4Config, LlamaConfig
 
 import jlens.artifact_provenance as provenance
 
@@ -96,3 +100,73 @@ def test_lens_resolution_does_not_fall_back(tmp_path, monkeypatch, selection):
         download.assert_called_once_with(**request)
     else:
         download.assert_not_called()
+
+
+@pytest.mark.parametrize("revision", ["main", "release-tag", "c" * 40])
+def test_gemma_config_without_private_commit_hash(monkeypatch, revision):
+    """Resolve the Hub commit before loading any model-dependent artifacts."""
+    config = Gemma4Config()
+    config.__dict__.pop("_commit_hash", None)
+    assert not hasattr(config, "_commit_hash")
+    commit = "d" * 40
+    api = Mock()
+    api.model_info.return_value = SimpleNamespace(sha=commit)
+    monkeypatch.setattr("huggingface_hub.HfApi", Mock(return_value=api))
+    auto_config = Mock()
+    auto_config.from_pretrained.return_value = config
+    auto_tokenizer = Mock()
+    auto_tokenizer.from_pretrained.return_value = SimpleNamespace(is_fast=True)
+    state = dict(
+        RUN_MODE="pretrained", MODEL_ID="google/gemma-4-31B", MODEL_REVISION=revision,
+        FIT_PROVENANCE={"model_id": "google/gemma-4-31B", "model_revision": commit},
+        AutoConfig=auto_config, AutoTokenizer=auto_tokenizer,
+        LENS_SOURCE="hub", LENS_PROVENANCE={"sha256": "a" * 64},
+        DEVICE="cpu", DTYPE="float32",
+    )
+    # Execute the actual identity/loading portion, before manifest serialization.
+    source = cell_source("c1eb4c15").split("\nimplementation =", 1)[0]
+    exec(source, state)
+    assert state["resolved_revision"] == commit
+    api.model_info.assert_called_once_with("google/gemma-4-31B", revision=revision)
+    auto_config.from_pretrained.assert_called_once_with("google/gemma-4-31B", revision=commit)
+    auto_tokenizer.from_pretrained.assert_called_once_with(
+        "google/gemma-4-31B", revision=commit, use_fast=True,
+    )
+
+
+@pytest.mark.parametrize("config", [
+    LlamaConfig(vocab_size=129), Gemma4Config(text_config={"vocab_size": 129}),
+], ids=["text", "multimodal"])
+def test_position_plot_uses_text_vocabulary(tmp_path, monkeypatch, config):
+    """Run the actual plot cell with flat and nested HF configurations."""
+    names = ["logit lens", "J-lens"]
+    words = pd.DataFrame([
+        {"dataset": "example", "item": "toy", "kind": "intermediate",
+         "word": "country", "lens": name, "positions": [1, 2, 3],
+         "ranks": np.array([[100, 50, 20], [30, 10, 5], [10, 5, 1]])}
+        for name in names
+    ])
+    spans = pd.concat([
+        words.assign(span=span, ranks=[row.min(1) for row in words.ranks])
+        for span in ["subject", "country token", "all but slot"]
+    ], ignore_index=True)
+    state = dict(
+        plt=plt, np=np, pd=pd, N_LAYERS=3, span_words=spans, position_words=words,
+        latent_items=pd.DataFrame([{
+            "dataset": "example", "item": "toy", "ids": [0, 1, 2, 3],
+            "prompt": "Toy country prompt",
+        }]),
+        tokenizer=SimpleNamespace(decode=lambda ids: str(ids[0])),
+        config=config, COLORS=dict(zip(names, ["red", "blue"], strict=True)),
+        K=10, RUN_MODE="smoke", RUN_DIR=tmp_path,
+    )
+    monkeypatch.setattr(plt, "show", Mock())
+    previous = set(plt.get_fignums())
+    try:
+        exec(cell_source("de8d805f"), state)
+        image = state["fig"].axes[0].images[0]
+        assert image.norm.vmax == pytest.approx(np.log10(129))
+        assert (tmp_path / "position_example.png").is_file()
+    finally:
+        for number in set(plt.get_fignums()) - previous:
+            plt.close(number)
