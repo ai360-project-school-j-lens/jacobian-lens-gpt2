@@ -8,6 +8,7 @@ from unittest.mock import Mock
 
 import nbformat
 import pytest
+from transformers import Gemma4Config
 
 import jlens.artifact_provenance as provenance
 
@@ -96,3 +97,35 @@ def test_lens_resolution_does_not_fall_back(tmp_path, monkeypatch, selection):
         download.assert_called_once_with(**request)
     else:
         download.assert_not_called()
+
+
+@pytest.mark.parametrize("revision", ["main", "release-tag", "c" * 40])
+def test_gemma_config_without_private_commit_hash(monkeypatch, revision):
+    """Resolve the Hub commit before loading any model-dependent artifacts."""
+    config = Gemma4Config()
+    config.__dict__.pop("_commit_hash", None)
+    assert not hasattr(config, "_commit_hash")
+    commit = "d" * 40
+    api = Mock()
+    api.model_info.return_value = SimpleNamespace(sha=commit)
+    monkeypatch.setattr("huggingface_hub.HfApi", Mock(return_value=api))
+    auto_config = Mock()
+    auto_config.from_pretrained.return_value = config
+    auto_tokenizer = Mock()
+    auto_tokenizer.from_pretrained.return_value = SimpleNamespace(is_fast=True)
+    state = dict(
+        RUN_MODE="pretrained", MODEL_ID="google/gemma-4-31B", MODEL_REVISION=revision,
+        FIT_PROVENANCE={"model_id": "google/gemma-4-31B", "model_revision": commit},
+        AutoConfig=auto_config, AutoTokenizer=auto_tokenizer,
+        LENS_SOURCE="hub", LENS_PROVENANCE={"sha256": "a" * 64},
+        DEVICE="cpu", DTYPE="float32",
+    )
+    # Execute the actual identity/loading portion, before manifest serialization.
+    source = cell_source("c1eb4c15").split("\nimplementation =", 1)[0]
+    exec(source, state)
+    assert state["resolved_revision"] == commit
+    api.model_info.assert_called_once_with("google/gemma-4-31B", revision=revision)
+    auto_config.from_pretrained.assert_called_once_with("google/gemma-4-31B", revision=commit)
+    auto_tokenizer.from_pretrained.assert_called_once_with(
+        "google/gemma-4-31B", revision=commit, use_fast=True,
+    )
