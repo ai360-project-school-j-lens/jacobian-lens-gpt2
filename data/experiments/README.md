@@ -2,6 +2,13 @@
 
 Prompt sets for the global-workspace experiments. Each `{slug}.json` is prompts only.
 
+The model-agnostic [token-swap notebook](../../notebooks/model_agnostic/token_swap/model_agnostic_token_swap.ipynb)
+uses both original Anthropic swap sets and local `latent-bridge` v1. Its
+[`token-swap-audit.json`](token-swap-audit.json) records upstream hashes, explicit
+quality exclusions, and limitations without changing the source datasets.
+Token coverage and baseline capability are checked again for each selected model;
+GPT-2 XL-filtered v2 is excluded from the default cross-model comparison.
+
 ## Conventions
 
 Unless a section says otherwise:

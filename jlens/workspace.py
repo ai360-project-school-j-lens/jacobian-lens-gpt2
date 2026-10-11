@@ -41,6 +41,7 @@ __all__ = [
     "InjectDirection",
     "clear_jacobian_cache",
     "final_norm_centers",
+    "final_norm_gain",
     "lens_direction",
     "record_residuals",
     "swap_basis",
@@ -155,7 +156,7 @@ def lens_direction(
     if centers is None:
         centers = final_norm_centers(model)
 
-    gamma = _module(model, "_final_norm", "norm").weight.float()
+    gamma = final_norm_gain(model)
     direction = gamma * _module(model, "_lm_head", "lm_head").weight[token_id].float()
     if centers:
         direction = direction - direction.mean()
@@ -163,6 +164,22 @@ def lens_direction(
         return direction
     # J_l^T applied to the direction; `direction @ J` is (J^T direction) for a vector.
     return direction @ _jacobian_on(lens, layer, direction.device)
+
+
+@torch.no_grad()
+def final_norm_gain(model: LensModel) -> torch.Tensor:
+    """Effective channel gain up to a common scalar, including offset RMSNorm.
+
+    A balanced +/-1 probe cancels additive bias and works for both LayerNorm
+    and RMSNorm, including norms parameterized by ``1 + weight`` (Gemma).
+    A common scalar on both swap vectors cancels in the coordinate clamp.
+    """
+    norm = _module(model, "_final_norm", "norm")
+    weight = next(norm.parameters())
+    probe = torch.ones(model.d_model, device=weight.device, dtype=weight.dtype)
+    probe[::2] = -1
+    centered = probe - probe.mean() if final_norm_centers(model) else probe
+    return (norm(probe).float() - norm(-probe).float()) / (2 * centered.float())
 
 
 def swap_basis(

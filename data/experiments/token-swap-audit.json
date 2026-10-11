@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "review_date": "2026-10-11",
+  "scope": "Conservative manual screen, not an exhaustive factual certification. Original files are unchanged. Tokenization and model capability are audited separately at runtime.",
+  "upstream": {
+    "repository": "https://github.com/anthropics/jacobian-lens",
+    "commit": "581d398613e5602a5af361e1c34d3a92ea82ba8e",
+    "files": {
+      "probe-swap.json": "a0edd27ca23f7b4d0fbe90448c2ddcc7457a3d812121bf024ed12a032ff86796",
+      "flexible-generalization.json": "f48d8e877c7422e14fa60794984fde07bbd11acbda4030c0149ec0a593773fdd"
+    },
+    "verification": "Both files byte-identical to this upstream commit."
+  },
+  "sources": [
+    "https://transformer-circuits.pub/2026/workspace/index.html",
+    "https://www.un.org/development/desa/pd/content/policy-brief153"
+  ],
+  "probe_exclusions": {
+    "beverage-source-wine": "The counterfactual asks for a fruit, but barley is a cereal.",
+    "bird-color-swan": "Colors depend on species; the eagle label is underspecified.",
+    "bird-country-eagle": "The swan-to-England national-emblem relation is not well defined.",
+    "christmas-season": "Seasons require a hemisphere; none is specified.",
+    "food-animal-honey": "The counterfactual asks for an insect but labels a cow.",
+    "func-pumps-chambers": "Lung lobes are not heart chambers; the counterfactual changes relation.",
+    "gem-source-pearl": "The counterfactual asks for an animal but labels earth.",
+    "holiday-month-christmas2": "Easter does not have a fixed month.",
+    "instr-hit-drums": "Wooden objects used to strike an instrument do not describe piano keys.",
+    "rhyme-rain-neighbor": "Belgium has more than one western neighbor; direction is underspecified.",
+    "super-populous-capital": "Outdated China premise; India overtook China in 2023.",
+    "vehicle-power-bicycle": "The counterfactual rider's power source is ill-formed for a train.",
+    "ex-city-continent-Toronto-Lyon": "At least one label is only a prefix of a multi-word answer.",
+    "ex-city-currency-Toronto-Beijing": "At least one label is only a prefix of a multi-word answer.",
+    "ex-city-currency-Toronto-Mumbai": "At least one label is only a prefix of a multi-word answer.",
+    "ex2-city-continent-Lima": "At least one label is only a prefix of a multi-word answer.",
+    "ex2-city-continent-Sydney": "At least one label is only a prefix of a multi-word answer.",
+    "person-century-lincoln": "At least one label is only a prefix of a multi-word answer.",
+    "spaceneedle-border": "At least one label is only a prefix of a multi-word answer."
+  },
+  "flexible_function_exclusions": {
+    "countries/continent": "North is an incomplete answer for North America; exclude the whole relation for balanced coverage.",
+    "months/holiday": "Biggest holiday is culture-dependent, Easter moves, and labels are fragments.",
+    "animals/habitat": "Sky/outdoors do not specify a unique natural habitat.",
+    "numbers/square": "twenty, forty and eighty are only prefixes of 25, 49 and 81."
+  },
+  "latent_landmark_exclusions": {
+    "the Ganges River": "Transboundary landmark does not identify a unique country.",
+    "Lake Titicaca": "Transboundary landmark does not identify a unique country.",
+    "the Western Wall": "Country attribution in East Jerusalem is disputed.",
+    "the Church of the Holy Sepulchre": "Country attribution in East Jerusalem is disputed."
+  },
+  "latent_concept_exclusions": {
+    "India": "One canonical main-language label hides substantial linguistic diversity; excluded conservatively."
+  },
+  "latent_v2": "Excluded from default experiments: 1416 rows are four targets for 354 subjects preselected for GPT-2 XL capability. Use v1 for cross-model coverage; v2 requires a separately reported model-specific analysis.",
+  "limitations": [
+    "Latent bridge v1 has one country-to-language relation, 100 source landmarks and four targets per prompt, not 400 independent questions.",
+    "Country/language labels simplify multilingual countries; retained labels are canonical continuations, not exhaustive accepted answers.",
+    "Single-token scoring undercounts valid synonyms, number forms and multi-token answers; report coverage for each tokenizer.",
+    "Anthropic flexible tasks explicitly mention the source; report separately from hidden intermediate tasks.",
+    "Do not select the best band on the same prompts and call its score held-out performance."
+  ]
+}
