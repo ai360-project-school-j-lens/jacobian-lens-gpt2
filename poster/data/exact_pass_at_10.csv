@@ -1,0 +1,187 @@
+dataset,kind,statistic,arm,reference,estimate,ci_low,ci_high,status,n_units,n_clusters,n_words_scored,model,k
+latent bridge: subject,control,arm,J-lens,,0.0151,0.0057,0.0264,ok,530,530,530,gpt2-xl,10
+latent bridge: subject,control,arm,logit lens,,0.0019,0.0,0.0057,ok,530,530,530,gpt2-xl,10
+latent bridge: subject,control,difference,J-lens,logit lens,0.0132,0.0038,0.0226,ok,530,530,530,gpt2-xl,10
+latent bridge: subject,intermediate,arm,J-lens,,0.566,0.5245,0.6075,ok,530,530,530,gpt2-xl,10
+latent bridge: subject,intermediate,arm,logit lens,,0.3642,0.3245,0.4057,ok,530,530,530,gpt2-xl,10
+latent bridge: subject,intermediate,difference,J-lens,logit lens,0.2019,0.1623,0.2396,ok,530,530,530,gpt2-xl,10
+latent bridge: country token,control,arm,J-lens,,0.2415,0.2057,0.2792,ok,530,530,530,gpt2-xl,10
+latent bridge: country token,control,arm,logit lens,,0.0,,,degenerate,530,530,530,gpt2-xl,10
+latent bridge: country token,control,difference,J-lens,logit lens,0.2415,0.2057,0.2792,ok,530,530,530,gpt2-xl,10
+latent bridge: country token,intermediate,arm,J-lens,,0.6491,0.6075,0.6887,ok,530,530,530,gpt2-xl,10
+latent bridge: country token,intermediate,arm,logit lens,,0.0717,0.0491,0.0943,ok,530,530,530,gpt2-xl,10
+latent bridge: country token,intermediate,difference,J-lens,logit lens,0.5774,0.534,0.6189,ok,530,530,530,gpt2-xl,10
+latent bridge: all but slot,control,arm,J-lens,,0.2604,0.2245,0.2981,ok,530,530,530,gpt2-xl,10
+latent bridge: all but slot,control,arm,logit lens,,0.0094,0.0019,0.0189,ok,530,530,530,gpt2-xl,10
+latent bridge: all but slot,control,difference,J-lens,logit lens,0.2509,0.2132,0.2887,ok,530,530,530,gpt2-xl,10
+latent bridge: all but slot,intermediate,arm,J-lens,,0.8151,0.7811,0.8472,ok,530,530,530,gpt2-xl,10
+latent bridge: all but slot,intermediate,arm,logit lens,,0.5151,0.4736,0.5585,ok,530,530,530,gpt2-xl,10
+latent bridge: all but slot,intermediate,difference,J-lens,logit lens,0.3,0.2604,0.3415,ok,530,530,530,gpt2-xl,10
+association,control,arm,J-lens,,0.0,,,degenerate,93,93,93,gpt2-xl,10
+association,control,arm,logit lens,,0.0,,,degenerate,93,93,93,gpt2-xl,10
+association,control,difference,J-lens,logit lens,0.0,,,degenerate,93,93,93,gpt2-xl,10
+association,intermediate,arm,J-lens,,0.0323,0.0,0.0753,ok,93,93,93,gpt2-xl,10
+association,intermediate,arm,logit lens,,0.0108,0.0,0.0323,ok,93,93,93,gpt2-xl,10
+association,intermediate,difference,J-lens,logit lens,0.0215,0.0,0.0538,ok,93,93,93,gpt2-xl,10
+multihop,control,arm,J-lens,,0.0,,,degenerate,92,92,101,gpt2-xl,10
+multihop,control,arm,logit lens,,0.0036,0.0,0.0109,ok,92,92,101,gpt2-xl,10
+multihop,control,difference,J-lens,logit lens,-0.0036,-0.0109,0.0,ok,92,92,101,gpt2-xl,10
+multihop,intermediate,arm,J-lens,,0.1075,0.0538,0.172,ok,93,93,103,gpt2-xl,10
+multihop,intermediate,arm,logit lens,,0.129,0.0645,0.2043,ok,93,93,103,gpt2-xl,10
+multihop,intermediate,difference,J-lens,logit lens,-0.0215,-0.0538,0.0,ok,93,93,103,gpt2-xl,10
+multihop-easy,control,arm,J-lens,,0.0,,,degenerate,100,72,200,gpt2-xl,10
+multihop-easy,control,arm,logit lens,,0.005,0.0,0.015,ok,100,72,200,gpt2-xl,10
+multihop-easy,control,difference,J-lens,logit lens,-0.005,-0.015,0.0,ok,100,72,200,gpt2-xl,10
+multihop-easy,intermediate,arm,J-lens,,0.3579,0.2976,0.4213,ok,100,72,200,gpt2-xl,10
+multihop-easy,intermediate,arm,logit lens,,0.475,0.4,0.5464,ok,100,72,200,gpt2-xl,10
+multihop-easy,intermediate,difference,J-lens,logit lens,-0.1171,-0.1756,-0.0605,ok,100,72,200,gpt2-xl,10
+multihop-easy-fewshot,control,arm,J-lens,,0.0206,0.0062,0.04,ok,100,72,200,gpt2-xl,10
+multihop-easy-fewshot,control,arm,logit lens,,0.02,0.005,0.04,ok,100,72,200,gpt2-xl,10
+multihop-easy-fewshot,control,difference,J-lens,logit lens,0.0006,-0.0217,0.0219,ok,100,72,200,gpt2-xl,10
+multihop-easy-fewshot,intermediate,arm,J-lens,,0.5683,0.5017,0.6317,ok,100,72,200,gpt2-xl,10
+multihop-easy-fewshot,intermediate,arm,logit lens,,0.6269,0.5806,0.6636,ok,100,72,200,gpt2-xl,10
+multihop-easy-fewshot,intermediate,difference,J-lens,logit lens,-0.0585,-0.1133,-0.0085,ok,100,72,200,gpt2-xl,10
+multilingual,control,arm,J-lens,,0.0055,0.0,0.014,ok,107,107,390,gpt2-xl,10
+multilingual,control,arm,logit lens,,0.0421,0.021,0.0662,ok,107,107,390,gpt2-xl,10
+multilingual,control,difference,J-lens,logit lens,-0.0366,-0.0576,-0.0179,ok,107,107,390,gpt2-xl,10
+multilingual,intermediate,arm,J-lens,,0.1628,0.1285,0.1994,ok,107,107,398,gpt2-xl,10
+multilingual,intermediate,arm,logit lens,,0.1791,0.1441,0.2165,ok,107,107,398,gpt2-xl,10
+multilingual,intermediate,difference,J-lens,logit lens,-0.0164,-0.0405,0.0086,ok,107,107,398,gpt2-xl,10
+order-ops,control,arm,J-lens,,0.01,0.0,0.03,ok,50,50,84,gpt2-xl,10
+order-ops,control,arm,logit lens,,0.0,,,degenerate,50,50,84,gpt2-xl,10
+order-ops,control,difference,J-lens,logit lens,0.01,0.0,0.03,ok,50,50,84,gpt2-xl,10
+order-ops,intermediate,arm,J-lens,,0.0,,,degenerate,55,55,110,gpt2-xl,10
+order-ops,intermediate,arm,logit lens,,0.0,,,degenerate,55,55,110,gpt2-xl,10
+order-ops,intermediate,difference,J-lens,logit lens,0.0,,,degenerate,55,55,110,gpt2-xl,10
+poetry,control,arm,J-lens,,0.0,,,degenerate,98,98,98,gpt2-xl,10
+poetry,control,arm,logit lens,,0.0102,0.0,0.0306,ok,98,98,98,gpt2-xl,10
+poetry,control,difference,J-lens,logit lens,-0.0102,-0.0306,0.0,ok,98,98,98,gpt2-xl,10
+poetry,intermediate,arm,J-lens,,0.0,,,degenerate,98,98,98,gpt2-xl,10
+poetry,intermediate,arm,logit lens,,0.0102,0.0,0.0306,ok,98,98,98,gpt2-xl,10
+poetry,intermediate,difference,J-lens,logit lens,-0.0102,-0.0306,0.0,ok,98,98,98,gpt2-xl,10
+typo,control,arm,J-lens,,0.0,,,degenerate,96,96,96,gpt2-xl,10
+typo,control,arm,logit lens,,0.0208,0.0,0.0521,ok,96,96,96,gpt2-xl,10
+typo,control,difference,J-lens,logit lens,-0.0208,-0.0521,0.0,ok,96,96,96,gpt2-xl,10
+typo,intermediate,arm,J-lens,,0.4062,0.3125,0.5104,ok,96,96,96,gpt2-xl,10
+typo,intermediate,arm,logit lens,,0.3229,0.2292,0.4167,ok,96,96,96,gpt2-xl,10
+typo,intermediate,difference,J-lens,logit lens,0.0833,0.0,0.1667,ok,96,96,96,gpt2-xl,10
+latent bridge: subject,control,arm,J-lens,,0.0113,0.0038,0.0208,ok,530,530,530,gemma-4-31b,10
+latent bridge: subject,control,arm,logit lens,,0.0019,0.0,0.0057,ok,530,530,530,gemma-4-31b,10
+latent bridge: subject,control,difference,J-lens,logit lens,0.0094,0.0019,0.0189,ok,530,530,530,gemma-4-31b,10
+latent bridge: subject,intermediate,arm,J-lens,,0.5774,0.5358,0.6208,ok,530,530,530,gemma-4-31b,10
+latent bridge: subject,intermediate,arm,logit lens,,0.3547,0.3132,0.3962,ok,530,530,530,gemma-4-31b,10
+latent bridge: subject,intermediate,difference,J-lens,logit lens,0.2226,0.1792,0.2679,ok,530,530,530,gemma-4-31b,10
+latent bridge: country token,control,arm,J-lens,,0.166,0.134,0.1962,ok,530,530,530,gemma-4-31b,10
+latent bridge: country token,control,arm,logit lens,,0.0,,,degenerate,530,530,530,gemma-4-31b,10
+latent bridge: country token,control,difference,J-lens,logit lens,0.166,0.134,0.1962,ok,530,530,530,gemma-4-31b,10
+latent bridge: country token,intermediate,arm,J-lens,,0.8642,0.834,0.8925,ok,530,530,530,gemma-4-31b,10
+latent bridge: country token,intermediate,arm,logit lens,,0.6453,0.6057,0.6868,ok,530,530,530,gemma-4-31b,10
+latent bridge: country token,intermediate,difference,J-lens,logit lens,0.2189,0.1792,0.2585,ok,530,530,530,gemma-4-31b,10
+latent bridge: all but slot,control,arm,J-lens,,0.3075,0.2679,0.3472,ok,530,530,530,gemma-4-31b,10
+latent bridge: all but slot,control,arm,logit lens,,0.0019,0.0,0.0057,ok,530,530,530,gemma-4-31b,10
+latent bridge: all but slot,control,difference,J-lens,logit lens,0.3057,0.2679,0.3453,ok,530,530,530,gemma-4-31b,10
+latent bridge: all but slot,intermediate,arm,J-lens,,0.9925,0.9849,0.9981,ok,530,530,530,gemma-4-31b,10
+latent bridge: all but slot,intermediate,arm,logit lens,,0.9057,0.8792,0.9302,ok,530,530,530,gemma-4-31b,10
+latent bridge: all but slot,intermediate,difference,J-lens,logit lens,0.0868,0.0623,0.1113,ok,530,530,530,gemma-4-31b,10
+association,control,arm,J-lens,,0.0,,,degenerate,102,102,102,gemma-4-31b,10
+association,control,arm,logit lens,,0.0,,,degenerate,102,102,102,gemma-4-31b,10
+association,control,difference,J-lens,logit lens,0.0,,,degenerate,102,102,102,gemma-4-31b,10
+association,intermediate,arm,J-lens,,0.1961,0.1176,0.2745,ok,102,102,102,gemma-4-31b,10
+association,intermediate,arm,logit lens,,0.1176,0.0588,0.1863,ok,102,102,102,gemma-4-31b,10
+association,intermediate,difference,J-lens,logit lens,0.0784,0.0196,0.1471,ok,102,102,102,gemma-4-31b,10
+multihop,control,arm,J-lens,,0.0181,0.0,0.0482,ok,83,83,92,gemma-4-31b,10
+multihop,control,arm,logit lens,,0.0542,0.0179,0.1024,ok,83,83,92,gemma-4-31b,10
+multihop,control,difference,J-lens,logit lens,-0.0361,-0.0904,0.012,ok,83,83,92,gemma-4-31b,10
+multihop,intermediate,arm,J-lens,,0.6071,0.5,0.7143,ok,84,84,94,gemma-4-31b,10
+multihop,intermediate,arm,logit lens,,0.6111,0.5079,0.7143,ok,84,84,94,gemma-4-31b,10
+multihop,intermediate,difference,J-lens,logit lens,-0.004,-0.0893,0.0853,ok,84,84,94,gemma-4-31b,10
+multihop-easy,control,arm,J-lens,,0.02,0.0048,0.04,ok,100,72,200,gemma-4-31b,10
+multihop-easy,control,arm,logit lens,,0.0562,0.0298,0.085,ok,100,72,200,gemma-4-31b,10
+multihop-easy,control,difference,J-lens,logit lens,-0.0363,-0.059,-0.0158,ok,100,72,200,gemma-4-31b,10
+multihop-easy,intermediate,arm,J-lens,,0.4352,0.3557,0.507,ok,100,72,200,gemma-4-31b,10
+multihop-easy,intermediate,arm,logit lens,,0.5062,0.4438,0.5623,ok,100,72,200,gemma-4-31b,10
+multihop-easy,intermediate,difference,J-lens,logit lens,-0.071,-0.1453,0.0019,ok,100,72,200,gemma-4-31b,10
+multilingual,control,arm,J-lens,,0.0218,0.0093,0.0366,ok,107,107,420,gemma-4-31b,10
+multilingual,control,arm,logit lens,,0.0101,0.0023,0.021,ok,107,107,420,gemma-4-31b,10
+multilingual,control,difference,J-lens,logit lens,0.0117,-0.0023,0.028,ok,107,107,420,gemma-4-31b,10
+multilingual,intermediate,arm,J-lens,,0.4229,0.3808,0.4626,ok,107,107,428,gemma-4-31b,10
+multilingual,intermediate,arm,logit lens,,0.465,0.4229,0.507,ok,107,107,428,gemma-4-31b,10
+multilingual,intermediate,difference,J-lens,logit lens,-0.0421,-0.0794,-0.0023,ok,107,107,428,gemma-4-31b,10
+order-ops,control,arm,J-lens,,0.38,0.28,0.48,ok,50,50,83,gemma-4-31b,10
+order-ops,control,arm,logit lens,,0.31,0.21,0.41,ok,50,50,83,gemma-4-31b,10
+order-ops,control,difference,J-lens,logit lens,0.07,-0.04,0.18,ok,50,50,83,gemma-4-31b,10
+order-ops,intermediate,arm,J-lens,,0.7909,0.7,0.8727,ok,55,55,109,gemma-4-31b,10
+order-ops,intermediate,arm,logit lens,,0.4636,0.3909,0.5364,ok,55,55,109,gemma-4-31b,10
+order-ops,intermediate,difference,J-lens,logit lens,0.3273,0.2455,0.4091,ok,55,55,109,gemma-4-31b,10
+poetry,control,arm,J-lens,,0.0,,,degenerate,98,98,98,gemma-4-31b,10
+poetry,control,arm,logit lens,,0.0,,,degenerate,98,98,98,gemma-4-31b,10
+poetry,control,difference,J-lens,logit lens,0.0,,,degenerate,98,98,98,gemma-4-31b,10
+poetry,intermediate,arm,J-lens,,0.1327,0.0714,0.2041,ok,98,98,98,gemma-4-31b,10
+poetry,intermediate,arm,logit lens,,0.0204,0.0,0.051,ok,98,98,98,gemma-4-31b,10
+poetry,intermediate,difference,J-lens,logit lens,0.1122,0.051,0.1735,ok,98,98,98,gemma-4-31b,10
+typo,control,arm,J-lens,,0.0104,0.0,0.0312,ok,96,96,96,gemma-4-31b,10
+typo,control,arm,logit lens,,0.0417,0.0104,0.0833,ok,96,96,96,gemma-4-31b,10
+typo,control,difference,J-lens,logit lens,-0.0312,-0.0729,0.0,ok,96,96,96,gemma-4-31b,10
+typo,intermediate,arm,J-lens,,0.5521,0.4583,0.6458,ok,96,96,96,gemma-4-31b,10
+typo,intermediate,arm,logit lens,,0.4896,0.3854,0.5938,ok,96,96,96,gemma-4-31b,10
+typo,intermediate,difference,J-lens,logit lens,0.0625,-0.0521,0.1771,ok,96,96,96,gemma-4-31b,10
+latent bridge: subject,control,arm,J-lens,,0.0038,0.0,0.0094,ok,530,530,530,gemma-4-e4b,10
+latent bridge: subject,control,arm,logit lens,,0.0057,0.0,0.0132,ok,530,530,530,gemma-4-e4b,10
+latent bridge: subject,control,difference,J-lens,logit lens,-0.0019,-0.0094,0.0057,ok,530,530,530,gemma-4-e4b,10
+latent bridge: subject,intermediate,arm,J-lens,,0.5019,0.4585,0.5434,ok,530,530,530,gemma-4-e4b,10
+latent bridge: subject,intermediate,arm,logit lens,,0.1057,0.0792,0.1321,ok,530,530,530,gemma-4-e4b,10
+latent bridge: subject,intermediate,difference,J-lens,logit lens,0.3962,0.3547,0.4396,ok,530,530,530,gemma-4-e4b,10
+latent bridge: country token,control,arm,J-lens,,0.034,0.0189,0.0491,ok,530,530,530,gemma-4-e4b,10
+latent bridge: country token,control,arm,logit lens,,0.0,,,degenerate,530,530,530,gemma-4-e4b,10
+latent bridge: country token,control,difference,J-lens,logit lens,0.034,0.0189,0.0491,ok,530,530,530,gemma-4-e4b,10
+latent bridge: country token,intermediate,arm,J-lens,,0.817,0.7849,0.8491,ok,530,530,530,gemma-4-e4b,10
+latent bridge: country token,intermediate,arm,logit lens,,0.0132,0.0038,0.0245,ok,530,530,530,gemma-4-e4b,10
+latent bridge: country token,intermediate,difference,J-lens,logit lens,0.8038,0.7698,0.8377,ok,530,530,530,gemma-4-e4b,10
+latent bridge: all but slot,control,arm,J-lens,,0.0623,0.0415,0.083,ok,530,530,530,gemma-4-e4b,10
+latent bridge: all but slot,control,arm,logit lens,,0.0075,0.0019,0.0151,ok,530,530,530,gemma-4-e4b,10
+latent bridge: all but slot,control,difference,J-lens,logit lens,0.0547,0.034,0.0755,ok,530,530,530,gemma-4-e4b,10
+latent bridge: all but slot,intermediate,arm,J-lens,,0.9698,0.9547,0.983,ok,530,530,530,gemma-4-e4b,10
+latent bridge: all but slot,intermediate,arm,logit lens,,0.3491,0.3094,0.3906,ok,530,530,530,gemma-4-e4b,10
+latent bridge: all but slot,intermediate,difference,J-lens,logit lens,0.6208,0.5792,0.6623,ok,530,530,530,gemma-4-e4b,10
+association,control,arm,J-lens,,0.0,,,degenerate,102,102,102,gemma-4-e4b,10
+association,control,arm,logit lens,,0.0196,0.0,0.049,ok,102,102,102,gemma-4-e4b,10
+association,control,difference,J-lens,logit lens,-0.0196,-0.049,0.0,ok,102,102,102,gemma-4-e4b,10
+association,intermediate,arm,J-lens,,0.049,0.0098,0.098,ok,102,102,102,gemma-4-e4b,10
+association,intermediate,arm,logit lens,,0.0294,0.0,0.0686,ok,102,102,102,gemma-4-e4b,10
+association,intermediate,difference,J-lens,logit lens,0.0196,-0.0294,0.0689,ok,102,102,102,gemma-4-e4b,10
+multihop,control,arm,J-lens,,0.0964,0.0422,0.1627,ok,83,83,92,gemma-4-e4b,10
+multihop,control,arm,logit lens,,0.0602,0.0181,0.1145,ok,83,83,92,gemma-4-e4b,10
+multihop,control,difference,J-lens,logit lens,0.0361,0.006,0.0783,ok,83,83,92,gemma-4-e4b,10
+multihop,intermediate,arm,J-lens,,0.5278,0.4206,0.6349,ok,84,84,94,gemma-4-e4b,10
+multihop,intermediate,arm,logit lens,,0.4405,0.3333,0.5476,ok,84,84,94,gemma-4-e4b,10
+multihop,intermediate,difference,J-lens,logit lens,0.0873,0.0079,0.1706,ok,84,84,94,gemma-4-e4b,10
+multihop-easy,control,arm,J-lens,,0.04,0.018,0.0617,ok,100,72,200,gemma-4-e4b,10
+multihop-easy,control,arm,logit lens,,0.005,0.0,0.015,ok,100,72,200,gemma-4-e4b,10
+multihop-easy,control,difference,J-lens,logit lens,0.035,0.0141,0.0548,ok,100,72,200,gemma-4-e4b,10
+multihop-easy,intermediate,arm,J-lens,,0.6781,0.6144,0.7323,ok,100,72,200,gemma-4-e4b,10
+multihop-easy,intermediate,arm,logit lens,,0.5438,0.4793,0.6041,ok,100,72,200,gemma-4-e4b,10
+multihop-easy,intermediate,difference,J-lens,logit lens,0.1344,0.0715,0.1869,ok,100,72,200,gemma-4-e4b,10
+multilingual,control,arm,J-lens,,0.0132,0.0023,0.0304,ok,107,107,420,gemma-4-e4b,10
+multilingual,control,arm,logit lens,,0.0023,0.0,0.007,ok,107,107,420,gemma-4-e4b,10
+multilingual,control,difference,J-lens,logit lens,0.0109,-0.0023,0.028,ok,107,107,420,gemma-4-e4b,10
+multilingual,intermediate,arm,J-lens,,0.4065,0.3645,0.4486,ok,107,107,428,gemma-4-e4b,10
+multilingual,intermediate,arm,logit lens,,0.3995,0.3621,0.4393,ok,107,107,428,gemma-4-e4b,10
+multilingual,intermediate,difference,J-lens,logit lens,0.007,-0.0327,0.0467,ok,107,107,428,gemma-4-e4b,10
+order-ops,control,arm,J-lens,,0.59,0.48,0.7,ok,50,50,83,gemma-4-e4b,10
+order-ops,control,arm,logit lens,,0.48,0.37,0.6,ok,50,50,83,gemma-4-e4b,10
+order-ops,control,difference,J-lens,logit lens,0.11,0.01,0.22,ok,50,50,83,gemma-4-e4b,10
+order-ops,intermediate,arm,J-lens,,0.6091,0.5273,0.6909,ok,55,55,109,gemma-4-e4b,10
+order-ops,intermediate,arm,logit lens,,0.6091,0.5182,0.7,ok,55,55,109,gemma-4-e4b,10
+order-ops,intermediate,difference,J-lens,logit lens,0.0,-0.1,0.1,ok,55,55,109,gemma-4-e4b,10
+poetry,control,arm,J-lens,,0.0,,,degenerate,98,98,98,gemma-4-e4b,10
+poetry,control,arm,logit lens,,0.0204,0.0,0.051,ok,98,98,98,gemma-4-e4b,10
+poetry,control,difference,J-lens,logit lens,-0.0204,-0.051,0.0,ok,98,98,98,gemma-4-e4b,10
+poetry,intermediate,arm,J-lens,,0.0102,0.0,0.0306,ok,98,98,98,gemma-4-e4b,10
+poetry,intermediate,arm,logit lens,,0.0306,0.0,0.0714,ok,98,98,98,gemma-4-e4b,10
+poetry,intermediate,difference,J-lens,logit lens,-0.0204,-0.0612,0.0204,ok,98,98,98,gemma-4-e4b,10
+typo,control,arm,J-lens,,0.0208,0.0,0.0521,ok,96,96,96,gemma-4-e4b,10
+typo,control,arm,logit lens,,0.0208,0.0,0.0521,ok,96,96,96,gemma-4-e4b,10
+typo,control,difference,J-lens,logit lens,0.0,-0.0312,0.0312,ok,96,96,96,gemma-4-e4b,10
+typo,intermediate,arm,J-lens,,0.5417,0.4479,0.6354,ok,96,96,96,gemma-4-e4b,10
+typo,intermediate,arm,logit lens,,0.3125,0.2188,0.4062,ok,96,96,96,gemma-4-e4b,10
+typo,intermediate,difference,J-lens,logit lens,0.2292,0.1042,0.3542,ok,96,96,96,gemma-4-e4b,10
