@@ -13,6 +13,54 @@ import numpy as np
 import pandas as pd
 
 
+def _validate_bootstrap_options(n_resamples, confidence, batch_size):
+    if (
+        not isinstance(n_resamples, int) or n_resamples < 2
+        or not isinstance(batch_size, int) or batch_size < 1
+        or not 0 < confidence < 1
+    ):
+        raise ValueError("Require >=2 resamples, positive batch size, and 0<confidence<1")
+
+
+def _bootstrap_plan_columns(
+    plans, n_values, comparisons, *, n_resamples, confidence, seed, batch_size,
+):
+    """Resample cluster sums once for all value columns and paired contrasts."""
+    n_columns = n_values + len(comparisons)
+    points, low, high, error = np.full((4, n_columns), np.nan)
+    status = np.full(n_columns, "no_supported_units", dtype=object)
+    left = [a for a, _ in comparisons]
+    right = [b for _, b in comparisons]
+    if plans:
+        points[:n_values] = np.mean(
+            [sums.sum(axis=0) / counts.sum() for sums, counts in plans], axis=0,
+        )
+        points[n_values:] = points[left] - points[right]
+        status[:] = "too_few_clusters"
+    enough = bool(plans) and all(len(counts) >= 2 for _, counts in plans)
+    if enough:
+        distributions = np.empty((n_resamples, n_columns))
+        generators = [np.random.default_rng(s) for s in np.random.SeedSequence(seed).spawn(len(plans))]
+        for start in range(0, n_resamples, batch_size):
+            stop = min(n_resamples, start + batch_size)
+            means = np.zeros((stop - start, n_values))
+            for (sums, counts), rng in zip(plans, generators, strict=True):
+                size = len(counts)
+                weights = rng.multinomial(size, np.full(size, 1 / size), size=stop - start)
+                means += (weights @ sums) / (weights @ counts)[:, None] / len(plans)
+            distributions[start:stop, :n_values] = means
+            distributions[start:stop, n_values:] = means[:, left] - means[:, right]
+        varying = np.ptp(distributions, axis=0) > 1e-12
+        status[:] = "degenerate"
+        status[varying] = "ok"
+        if varying.any():
+            tail = (1 - confidence) / 2
+            sample = distributions[:, varying]
+            low[varying], high[varying] = np.quantile(sample, [tail, 1 - tail], axis=0)
+            error[varying] = sample.std(axis=0, ddof=1)
+    return points, low, high, error, status
+
+
 def paired_cluster_bootstrap(
     scores: pd.DataFrame,
     *,
@@ -44,12 +92,7 @@ def paired_cluster_bootstrap(
         raise ValueError("Require at least two distinct arms")
     if any(a not in arms or b not in arms or a == b for a, b in comparisons):
         raise ValueError("Comparisons must name distinct requested arms")
-    if (
-        not isinstance(n_resamples, int) or n_resamples < 2
-        or not isinstance(batch_size, int) or batch_size < 1
-        or not 0 < confidence < 1
-    ):
-        raise ValueError("Require >=2 resamples, positive batch size, and 0<confidence<1")
+    _validate_bootstrap_options(n_resamples, confidence, batch_size)
     required = ["unit", "cluster", "stratum", "arm", "value"]
     if missing := set(required) - set(scores):
         raise ValueError(f"Missing score columns: {sorted(missing)}")
@@ -86,49 +129,17 @@ def paired_cluster_bootstrap(
         counts = np.bincount(cluster_ids).astype(float)
         plans.append((sums, counts))
 
-    n_columns = len(arms) + len(comparisons)
-    points = np.full(n_columns, np.nan)
-    if plans:
-        points[:len(arms)] = np.mean(
-            [sums.sum(axis=0) / counts.sum() for sums, counts in plans], axis=0,
-        )
-        for j, (a, b) in enumerate(comparisons, len(arms)):
-            points[j] = points[arms.index(a)] - points[arms.index(b)]
-    distributions = np.empty((n_resamples, n_columns))
-    enough = bool(plans) and all(len(counts) >= 2 for _, counts in plans)
-    if enough:
-        # Separate stratum RNGs keep results invariant to the memory batch size.
-        generators = [np.random.default_rng(s) for s in np.random.SeedSequence(seed).spawn(len(plans))]
-        for start in range(0, n_resamples, batch_size):
-            stop = min(n_resamples, start + batch_size)
-            means = np.zeros((stop - start, len(arms)))
-            for (sums, counts), rng in zip(plans, generators, strict=True):
-                size = len(counts)
-                weights = rng.multinomial(size, np.full(size, 1 / size), size=stop - start)
-                means += (weights @ sums) / (weights @ counts)[:, None] / len(plans)
-            distributions[start:stop, :len(arms)] = means
-            for j, (a, b) in enumerate(comparisons, len(arms)):
-                distributions[start:stop, j] = means[:, arms.index(a)] - means[:, arms.index(b)]
-
+    points, low, high, error, status = _bootstrap_plan_columns(
+        plans, len(arms), [(arms.index(a), arms.index(b)) for a, b in comparisons],
+        n_resamples=n_resamples, confidence=confidence, seed=seed, batch_size=batch_size,
+    )
     rows = []
     labels = [("arm", a, "") for a in arms] + [("difference", a, b) for a, b in comparisons]
     for j, (statistic, arm, reference) in enumerate(labels):
-        low = high = error = np.nan
-        if not plans:
-            status = "no_supported_units"
-        elif not enough:
-            status = "too_few_clusters"
-        elif np.ptp(distributions[:, j]) <= 1e-12:
-            status = "degenerate"
-        else:
-            status = "ok"
-            tail = (1 - confidence) / 2
-            low, high = np.quantile(distributions[:, j], [tail, 1 - tail])
-            error = distributions[:, j].std(ddof=1)
         rows.append(dict(
             statistic=statistic, arm=arm, reference=reference,
-            estimate=points[j], ci_low=low, ci_high=high, standard_error=error,
-            status=status, n_units_total=n_total, n_units=len(wide),
+            estimate=points[j], ci_low=low[j], ci_high=high[j], standard_error=error[j],
+            status=status[j], n_units_total=n_total, n_units=len(wide),
             n_units_excluded=n_total - len(wide), n_clusters=metadata.cluster.nunique(),
             n_strata_total=total_strata, n_strata=len(plans),
             n_resamples=n_resamples, confidence=confidence, seed=seed,
@@ -191,6 +202,57 @@ def swap_bootstrap(results: pd.DataFrame, **bootstrap_options) -> pd.DataFrame:
 EASY_DATASETS = ("multihop-easy", "multihop-easy-fewshot")
 
 
+def _retrieval_inputs(words, ks):
+    """Validate paired annotation identities before scoring cached ranks."""
+    ks = list(ks)
+    if len(ks) < 2 or any(not isinstance(k, int) or k < 1 for k in ks) or ks != sorted(set(ks)):
+        raise ValueError("ks must be at least two distinct increasing positive integers")
+    arms = ["J-lens", "logit lens"]
+    word_keys = ["dataset", "item", "kind", "word", "role"]
+    if missing := {*word_keys, "lens", "ranks"} - set(words):
+        raise ValueError(f"Missing rank columns: {sorted(missing)}")
+    data = words[words.lens.isin(arms)].copy().reset_index(drop=True)
+    if data[word_keys + ["lens"]].isna().any().any():
+        raise ValueError("Rank identities cannot be null")
+    if data.duplicated([*word_keys, "lens"]).any():
+        raise ValueError("Duplicate word/lens ranks; select a single span/subset first")
+    if not data.groupby(word_keys).lens.nunique().eq(2).all():
+        raise ValueError("Every word must have both paired lenses")
+    support = data.assign(supported=data.ranks.notna()).pivot(
+        index=word_keys, columns="lens", values="supported",
+    ).reindex(columns=arms)
+    if not support[arms[0]].eq(support[arms[1]]).all():
+        raise ValueError("Paired lenses have different annotation support")
+    return data, ks
+
+
+def _retrieval_unit_scores(scored, value_columns, dataset, easy_metadata):
+    """Aggregate any number of metrics with the benchmark's item/family weights."""
+    prompt_scores = scored.groupby(["item", "lens"])[value_columns].mean().reset_index()
+    if dataset in EASY_DATASETS:
+        required_metadata = ["item", "base_id", "group_id", "family"]
+        if easy_metadata is None or not set(required_metadata) <= set(easy_metadata):
+            raise ValueError("multihop-easy requires base/group/family metadata")
+        metadata = easy_metadata[required_metadata]
+        if metadata.item.duplicated().any() or metadata.isna().any().any():
+            raise ValueError("Easy metadata must be non-null and unique by item")
+        merged = prompt_scores.merge(metadata, on="item", how="left", validate="many_to_one")
+        if merged[required_metadata].isna().any().any():
+            raise ValueError("Missing multihop-easy grouping metadata")
+        if (merged.groupby("base_id")[["group_id", "family"]].nunique() > 1).any().any():
+            raise ValueError("Each base item must belong to one group/family")
+        scores = merged.groupby(["base_id", "group_id", "family", "lens"])[value_columns].mean().reset_index()
+        scores = scores.rename(columns={
+            "base_id": "unit", "group_id": "cluster", "family": "stratum", "lens": "arm",
+        })
+        aggregation = "word -> phrasing -> base -> family -> equal-family mean"
+    else:
+        scores = prompt_scores.rename(columns={"item": "unit", "lens": "arm"})
+        scores = scores.assign(cluster=scores.unit, stratum="all")
+        aggregation = "word mean within item; equal item mean"
+    return scores, aggregation
+
+
 def retrieval_bootstrap(
     words: pd.DataFrame,
     *,
@@ -208,20 +270,8 @@ def retrieval_bootstrap(
     base items as well as their phrasings. Coverage is conditional on supported
     annotations. Neither layers nor k are chosen from the observed results.
     """
-    ks = list(ks)
-    if len(ks) < 2 or any(not isinstance(k, int) or k < 1 for k in ks) or ks != sorted(set(ks)):
-        raise ValueError("ks must be at least two distinct increasing positive integers")
     arms = ["J-lens", "logit lens"]
-    word_keys = ["dataset", "item", "kind", "word", "role"]
-    if missing := {*word_keys, "lens", "ranks"} - set(words):
-        raise ValueError(f"Missing rank columns: {sorted(missing)}")
-    data = words[words.lens.isin(arms)].copy()
-    if data[word_keys + ["lens"]].isna().any().any():
-        raise ValueError("Rank identities cannot be null")
-    if data.duplicated([*word_keys, "lens"]).any():
-        raise ValueError("Duplicate word/lens ranks; select a single span/subset first")
-    if not data.groupby(word_keys).lens.nunique().eq(2).all():
-        raise ValueError("Every word must have both paired lenses")
+    data, ks = _retrieval_inputs(words, ks)
 
     def best_rank(ranks):
         if ranks is None or (np.isscalar(ranks) and pd.isna(ranks)):
@@ -235,11 +285,6 @@ def retrieval_bootstrap(
         return selected.min()
 
     data["best"] = data.ranks.map(best_rank)
-    support = data.assign(supported=data.best.notna()).pivot(
-        index=word_keys, columns="lens", values="supported",
-    )
-    if not support[arms[0]].eq(support[arms[1]]).all():
-        raise ValueError("Paired lenses have different annotation support")
     tables = []
     for (dataset, kind), group in data.groupby(["dataset", "kind"], sort=True):
         hits = (group.best.to_numpy()[:, None] <= np.asarray(ks)).astype(float)
@@ -248,28 +293,7 @@ def retrieval_bootstrap(
         metrics = [("pass_at_k", k) for k in ks] + [("log_k_auc", None)]
         for j, (metric, k) in enumerate(metrics):
             scored = group.assign(value=values[:, j])
-            prompt_scores = scored.groupby(["item", "lens"]).value.mean().reset_index()
-            if dataset in EASY_DATASETS:
-                required_metadata = ["item", "base_id", "group_id", "family"]
-                if easy_metadata is None or not set(required_metadata) <= set(easy_metadata):
-                    raise ValueError("multihop-easy requires base/group/family metadata")
-                metadata = easy_metadata[required_metadata]
-                if metadata.item.duplicated().any() or metadata.isna().any().any():
-                    raise ValueError("Easy metadata must be non-null and unique by item")
-                merged = prompt_scores.merge(metadata, on="item", how="left", validate="many_to_one")
-                if merged[required_metadata].isna().any().any():
-                    raise ValueError("Missing multihop-easy grouping metadata")
-                if (merged.groupby("base_id")[["group_id", "family"]].nunique() > 1).any().any():
-                    raise ValueError("Each base item must belong to one group/family")
-                scores = merged.groupby(["base_id", "group_id", "family", "lens"]).value.mean().reset_index()
-                scores = scores.rename(columns={
-                    "base_id": "unit", "group_id": "cluster", "family": "stratum", "lens": "arm",
-                })
-                aggregation = "word -> phrasing -> base -> family -> equal-family mean"
-            else:
-                scores = prompt_scores.rename(columns={"item": "unit", "lens": "arm"})
-                scores = scores.assign(cluster=scores.unit, stratum="all")
-                aggregation = "word mean within item; equal item mean"
+            scores, aggregation = _retrieval_unit_scores(scored, ["value"], dataset, easy_metadata)
             table = paired_cluster_bootstrap(
                 scores, arms=arms, comparisons=[("J-lens", "logit lens")],
                 **bootstrap_options,
@@ -291,15 +315,24 @@ def retrieval_bootstrap_by_layer(
     n_layers: int,
     ks: Sequence[int] = (1, 2, 5, 10, 20, 50, 100),
     easy_metadata: pd.DataFrame | None = None,
-    **bootstrap_options,
+    n_resamples: int = 10_000,
+    confidence: float = 0.95,
+    seed: int = 0,
+    batch_size: int = 256,
 ) -> pd.DataFrame:
     """Return pointwise retrieval intervals at each block, including the final one.
 
-    Each block uses :func:`retrieval_bootstrap` with a singleton layer selection,
-    retaining its word/item weights, paired differences, grouping, and coverage.
-    The same seed reuses cluster draws across blocks; these are pointwise CIs,
-    not a simultaneous band or intervals for a best-layer score. Only cached
-    ranks are used, and one layer is processed at a time to bound memory.
+    Retain :func:`retrieval_bootstrap`'s word/item weights, paired differences,
+    grouping, and coverage. Aggregate all layers and metrics together, drawing
+    cluster weights once per dataset/kind and applying them to every column.
+    This is equivalent to singleton-layer calls with the same seed, without
+    repeating resampling and pandas grouping for every layer and metric.
+    Intervals remain pointwise, not simultaneous or for a best-layer score.
+
+    Only cached ranks are used. Datasets/kinds are processed separately, and
+    resample weights are batched. Bootstrap distributions occupy approximately
+    8 * n_resamples * n_layers * (len(ks) + 1) * 3 bytes per dataset/kind, plus
+    temporary arrays for quantiles and aggregated cluster scores.
 
     ``layer`` is zero-based and ``depth_fraction`` is layer / (n_layers - 1),
     so the shared final block is 1. ``n_layers`` is explicit to preserve all
@@ -308,24 +341,89 @@ def retrieval_bootstrap_by_layer(
     """
     if not isinstance(n_layers, int) or isinstance(n_layers, bool) or n_layers < 2:
         raise ValueError("n_layers must be an integer >= 2")
-    if missing := {"lens", "ranks"} - set(words):
-        raise ValueError(f"Missing rank columns: {sorted(missing)}")
-    ranks = words.loc[words.lens.isin(["J-lens", "logit lens"]), "ranks"]
-    if any(np.asarray(rank).shape != (n_layers,) for rank in ranks.dropna()):
-        raise ValueError("Every supported rank vector must have n_layers entries")
-    tables = []
-    for layer in range(n_layers):
-        table = retrieval_bootstrap(
-            words, ks=ks, layers=[layer], easy_metadata=easy_metadata,
-            **bootstrap_options,
+    _validate_bootstrap_options(n_resamples, confidence, batch_size)
+    arms = ["J-lens", "logit lens"]
+    data, ks = _retrieval_inputs(words, ks)
+    for rank in data.ranks.dropna():
+        array = np.asarray(rank, dtype=float)
+        if array.shape != (n_layers,):
+            raise ValueError("Every supported rank vector must have n_layers entries")
+        if not np.isfinite(array).all() or (array < 1).any():
+            raise ValueError("Expected finite positive one-dimensional rank vectors")
+    metrics = [("pass_at_k", k) for k in ks] + [("log_k_auc", None)]
+    features = list(range(n_layers * len(metrics)))
+    comparisons = [(2 * feature, 2 * feature + 1) for feature in features]
+    n_values = 2 * len(features)
+    rows = []
+    for (dataset, kind), group in data.groupby(["dataset", "kind"], sort=True):
+        supported = group.ranks.notna().to_numpy()
+        ranks = np.full((len(group), n_layers), np.nan)
+        if supported.any():
+            ranks[supported] = np.stack(group.loc[supported, "ranks"])
+        hits = (ranks[:, :, None] <= np.asarray(ks)).astype(float)
+        hits[~supported] = np.nan
+        auc = np.trapezoid(hits, np.log(ks), axis=2) / np.log(ks[-1] / ks[0])
+        values = np.concatenate([hits, auc[:, :, None]], axis=2).reshape(len(group), -1)
+        scored = pd.concat([
+            group[["item", "lens"]].reset_index(drop=True), pd.DataFrame(values),
+        ], axis=1)
+        scores, aggregation = _retrieval_unit_scores(scored, features, dataset, easy_metadata)
+        wide = scores.pivot(index="unit", columns="arm", values=features).reindex(
+            columns=pd.MultiIndex.from_product([features, arms]),
         )
-        tables.append(table.assign(
-            layer=layer, n_layers=n_layers,
-            depth_fraction=layer / (n_layers - 1),
-            depth_percent=100 * layer / (n_layers - 1),
-            is_final_layer=layer == n_layers - 1, scope="single block",
-        ))
-    return pd.concat(tables, ignore_index=True)
+        metadata = scores.drop_duplicates("unit").set_index("unit")[["cluster", "stratum"]]
+        if (metadata.groupby("cluster").stratum.nunique() > 1).any():
+            raise ValueError("Clusters must be nested within strata")
+        total_strata = metadata.stratum.nunique()
+        n_total = len(wide)
+        wide = wide.loc[wide.notna().all(axis=1)]
+        metadata = metadata.loc[wide.index]
+        n_clusters = metadata.cluster.nunique()
+        plans = []
+        for _, stratum in metadata.groupby("stratum", sort=True):
+            cluster_ids, names = pd.factorize(stratum.cluster, sort=True)
+            sums = np.zeros((len(names), n_values))
+            np.add.at(sums, cluster_ids, wide.loc[stratum.index].to_numpy(dtype=float))
+            plans.append((sums, np.bincount(cluster_ids).astype(float)))
+        points, low, high, error, status = _bootstrap_plan_columns(
+            plans, n_values, comparisons, n_resamples=n_resamples,
+            confidence=confidence, seed=seed, batch_size=batch_size,
+        )
+        first = group[group.lens.eq(arms[0])]
+        coverage = dict(
+            n_words=len(first), n_words_scored=int(first.ranks.notna().sum()),
+            n_items=first.item.nunique(),
+            n_items_scored=first.loc[first.ranks.notna(), "item"].nunique(),
+        )
+        for layer in range(n_layers):
+            for metric_index, (metric, k) in enumerate(metrics):
+                feature = layer * len(metrics) + metric_index
+                labels = [
+                    ("arm", arms[0], "", 2 * feature),
+                    ("arm", arms[1], "", 2 * feature + 1),
+                    ("difference", arms[0], arms[1], n_values + feature),
+                ]
+                for statistic, arm, reference, j in labels:
+                    rows.append(dict(
+                        statistic=statistic, arm=arm, reference=reference,
+                        estimate=points[j], ci_low=low[j], ci_high=high[j], standard_error=error[j],
+                        status=status[j], n_units_total=n_total, n_units=len(wide),
+                        n_units_excluded=n_total - len(wide), n_clusters=n_clusters,
+                        n_strata_total=total_strata, n_strata=len(plans),
+                        n_resamples=n_resamples, confidence=confidence, seed=seed,
+                        interval_method="paired stratified cluster percentile",
+                        dataset=dataset, kind=kind, metric=metric, k=k,
+                        **coverage, aggregation=aggregation,
+                        layer=layer, n_layers=n_layers,
+                        depth_fraction=layer / (n_layers - 1),
+                        depth_percent=100 * layer / (n_layers - 1),
+                        is_final_layer=layer == n_layers - 1, scope="single block",
+                    ))
+    result = pd.DataFrame(rows)
+    if rows:
+        # Match retrieval_bootstrap's integer k values and None for AUC.
+        result["k"] = pd.Series([row["k"] for row in rows], dtype=object)
+    return result.sort_values("layer", kind="stable").reset_index(drop=True) if rows else result
 
 
 def introspection_bootstrap(

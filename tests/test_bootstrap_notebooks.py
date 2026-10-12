@@ -224,7 +224,24 @@ def test_layerwise_cache_plots_and_exports_match_without_model_calls(
         PRINT_LAYERWISE_CSV=True, plt=plt,
         COLORS={"J-lens": "blue", "logit lens": "red"},
     )
+    compute = state["retrieval_bootstrap_by_layer"]
+
+    def interrupted_compute(*args, **kwargs):
+        if compute.call_count == 2:
+            raise RuntimeError("Simulated interrupted bootstrap")
+        return retrieval_bootstrap_by_layer(*args, **kwargs)
+
+    compute.side_effect = interrupted_compute
+    with pytest.raises(RuntimeError, match="interrupted bootstrap"):
+        exec(source["bootstrap-layerwise-analysis"], state)
+    parts_dir = state["RUN_DIR"] / "layerwise_parts"
+    saved_parts = {p: p.read_bytes() for p in parts_dir.glob("*.pkl")}
+    assert len(saved_parts) == 1
+    assert not (state["RUN_DIR"] / "layerwise_bootstrap.pkl").exists()
+    compute.reset_mock(side_effect=True)
     exec(source["bootstrap-layerwise-analysis"], state)
+    assert compute.call_count == len(list(parts_dir.glob("*.pkl"))) - 1
+    assert {p: p.read_bytes() for p in saved_parts} == saved_parts
     original = state["layerwise_ci"].copy()
     calls = state["retrieval_bootstrap_by_layer"].call_count
     exec(source["bootstrap-layerwise-analysis"], state)

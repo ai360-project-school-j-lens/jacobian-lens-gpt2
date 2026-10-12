@@ -1,5 +1,7 @@
 """Statistical regression checks using explicit finite prompt populations."""
 
+from unittest.mock import Mock
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -205,6 +207,59 @@ def test_layerwise_retrieval_rejects_truncated_rank_vectors():
     words.at[0, "ranks"] = np.array([1, 2])
     with pytest.raises(ValueError, match="n_layers entries"):
         retrieval_bootstrap_by_layer(words, n_layers=3)
+
+
+def test_layerwise_retrieval_draws_weights_once_for_all_layers_and_metrics(monkeypatch):
+    original_rng = np.random.default_rng
+    generators = []
+
+    def tracked_rng(seed):
+        generator = Mock(wraps=original_rng(seed))
+        generators.append(generator)
+        return generator
+
+    monkeypatch.setattr(np.random, "default_rng", tracked_rng)
+    retrieval_bootstrap_by_layer(
+        rank_words(), n_layers=3, ks=[1, 3, 10], n_resamples=101, batch_size=17,
+    )
+    assert len(generators) == 1
+    assert generators[0].multinomial.call_count == 6  # ceil(101 / 17), for all columns
+
+
+def test_vectorized_layerwise_intervals_match_clustered_single_layer_reference():
+    rng = np.random.default_rng(12)
+    words, metadata = [], []
+    for family, n_bases in [("a", 4), ("b", 6)]:
+        for base in range(n_bases):
+            for phrasing in range(2):
+                item = f"{family}-{base}-{phrasing}"
+                metadata.append(dict(item=item, family=family, base_id=f"{family}-{base}",
+                                     group_id=f"{family}-{base // 3}"))
+                for role in range(1 + base % 3):
+                    for kind in ["intermediate", "control"]:
+                        for arm in ["J-lens", "logit lens"]:
+                            ranks = rng.integers(1, 25, size=5)
+                            ranks[-1] = base + 1
+                            if kind == "control":
+                                ranks[:] = 50
+                            if base == 2 or (base == 0 and role == 0 and phrasing == 0):
+                                ranks = None
+                            words.append(dict(
+                                dataset="multihop-easy", item=item, word=str(role),
+                                role=role, kind=kind, lens=arm, ranks=ranks,
+                            ))
+    words = pd.DataFrame(words)
+    options = dict(ks=[1, 4, 12], easy_metadata=pd.DataFrame(metadata),
+                   n_resamples=199, seed=13, batch_size=7)
+    vectorized = retrieval_bootstrap_by_layer(words, n_layers=5, **options)
+    assert vectorized.status.eq("ok").any()
+    for layer in range(5):
+        expected = retrieval_bootstrap(words, layers=[layer], **options)
+        actual = vectorized.loc[vectorized.layer.eq(layer), expected.columns].reset_index(drop=True)
+        pd.testing.assert_frame_equal(actual, expected, rtol=1e-11, atol=1e-12)
+    options["batch_size"] = 50
+    different_batch = retrieval_bootstrap_by_layer(words, n_layers=5, **options)
+    pd.testing.assert_frame_equal(vectorized, different_batch, rtol=1e-11, atol=1e-12)
 
 
 @pytest.mark.parametrize("dataset", ["multihop-easy", "multihop-easy-fewshot"])
