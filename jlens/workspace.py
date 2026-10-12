@@ -37,12 +37,15 @@ from jlens.protocol import LensModel
 Positions = slice | Sequence[int]
 
 __all__ = [
+    "ClampDirections",
     "ClampSwap",
     "InjectDirection",
     "InjectDirections",
     "clear_jacobian_cache",
     "final_norm_centers",
     "final_norm_gain",
+    "jspace_component",
+    "lens_dictionary",
     "lens_direction",
     "lens_directions",
     "record_residuals",
@@ -439,6 +442,12 @@ class InjectDirections(_BandHook):
     prompt. One forward pass then covers a whole sweep of concepts, strengths and
     direction kinds (J, logit, random) over the same band and positions.
 
+    That live norm already contains the injections of the earlier band layers, so
+    over a band the update compounds: the residual grows roughly like
+    ``(1 + strength) ** n_layers`` along the injected direction. Pass
+    ``reference_norms`` (e.g. the clean pass's mean norm over the same positions)
+    to scale every layer by a fixed reference instead.
+
     Args:
         model: The model to hook.
         layers: Band layer indices.
@@ -448,6 +457,8 @@ class InjectDirections(_BandHook):
         strengths: ``[batch]`` multipliers on each row's mean residual norm; a zero
             row is left exactly unchanged.
         positions: Token positions to inject at, shared by all rows.
+        reference_norms: Optional ``{layer: norm}`` used instead of each row's live
+            mean residual norm, so the update does not compound across the band.
     """
 
     def __init__(
@@ -458,9 +469,11 @@ class InjectDirections(_BandHook):
         strengths: Sequence[float] | torch.Tensor,
         *,
         positions: Positions = slice(None),
+        reference_norms: Mapping[int, float | torch.Tensor] | None = None,
     ) -> None:
         super().__init__(model, layers, positions)
         self._rows = slice(None)
+        self._reference_norms = reference_norms
         self._strengths = torch.as_tensor(strengths, dtype=torch.float32).reshape(-1)
         self._directions: dict[int, torch.Tensor] = {}
         for layer in layers:
@@ -479,7 +492,136 @@ class InjectDirections(_BandHook):
                 f"batch has {h.shape[0]} rows but {len(self._strengths)} strengths"
             )
         rows = h[:, self._positions].float()
-        mean_norm = rows.norm(dim=-1).mean(dim=1)
+        if self._reference_norms is None:
+            mean_norm = rows.norm(dim=-1).mean(dim=1)
+        else:
+            mean_norm = torch.as_tensor(
+                self._reference_norms[layer], dtype=torch.float32, device=rows.device
+            )
         scale = self._strengths.to(rows.device) * mean_norm
         direction = self._directions[layer].to(rows.device)
         return scale[:, None, None] * direction[:, None, :]
+
+
+@torch.no_grad()
+def lens_dictionary(
+    model: LensModel,
+    lens: JacobianLens,
+    layer: int,
+    *,
+    centers: bool | None = None,
+    chunk_size: int = 8192,
+) -> torch.Tensor:
+    """Unit-norm J-lens directions of every vocabulary token at ``layer``.
+
+    Returns:
+        A ``[vocab, d_model]`` float32 tensor on the unembedding's device, the
+        dictionary that :func:`jspace_component` decomposes vectors over.
+    """
+    if centers is None:
+        centers = final_norm_centers(model)
+    vocab = _module(model, "_lm_head", "lm_head").weight.shape[0]
+    rows = []
+    for start in range(0, vocab, chunk_size):
+        ids = torch.arange(start, min(vocab, start + chunk_size))
+        block = lens_directions(model, lens, ids, layer, centers=centers)
+        rows.append(block / block.norm(dim=-1, keepdim=True).clamp(min=1e-12))
+    return torch.cat(rows)
+
+
+@torch.no_grad()
+def jspace_component(
+    vectors: torch.Tensor,
+    dictionary: torch.Tensor,
+    k: int = 16,
+    *,
+    refit_steps: int = 300,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Sparse non-negative J-space component of each row, by greedy pursuit.
+
+    Each of ``k`` steps adds the dictionary atom with the largest positive
+    correlation with the current residual, then refits the non-negative
+    coefficients on the whole support by projected gradient descent (non-negative
+    least squares). The component is the resulting non-negative combination of
+    ``k`` J-lens vectors -- the paper's projection onto its sparse cone -- and
+    ``vectors - component`` is the non-J-space remainder. Rows are independent and
+    processed as one batch.
+
+    Args:
+        vectors: ``[n, d_model]`` vectors to decompose.
+        dictionary: ``[vocab, d_model]`` unit-norm atoms, from :func:`lens_dictionary`.
+        k: Number of atoms per row.
+        refit_steps: Projected-gradient iterations per refit.
+
+    Returns:
+        ``(component, support, coefficients)`` of shapes ``[n, d_model]``,
+        ``[n, k]`` (atom indices in selection order) and ``[n, k]`` (non-negative).
+    """
+    x = vectors.float()
+    atoms_all = dictionary.to(device=x.device, dtype=torch.float32)
+    n = x.shape[0]
+    support = torch.empty(n, 0, dtype=torch.long, device=x.device)
+    coefficients = torch.empty(n, 0, device=x.device)
+    component = torch.zeros_like(x)
+    for _ in range(k):
+        scores = (x - component) @ atoms_all.T
+        if support.shape[1]:
+            scores.scatter_(1, support, -torch.inf)
+        support = torch.cat([support, scores.argmax(dim=1, keepdim=True)], dim=1)
+        atoms = atoms_all[support]  # [n, s, d]
+        gram = atoms @ atoms.transpose(1, 2)
+        target = (atoms @ x[..., None]).squeeze(-1)
+        step = 1.0 / torch.linalg.eigvalsh(gram)[:, -1:].clamp(min=1e-12)
+        coefficients = torch.cat([coefficients, torch.zeros(n, 1, device=x.device)], 1)
+        for _ in range(refit_steps):
+            gradient = (gram @ coefficients[..., None]).squeeze(-1) - target
+            coefficients = (coefficients - step * gradient).clamp(min=0)
+        component = (coefficients[:, None, :] @ atoms).squeeze(1)
+    return component, support, coefficients
+
+
+class ClampDirections(_BandHook):
+    """Hold each batch row's coordinates along its own basis at clean-pass values.
+
+    After each band block, row ``b`` becomes ``h + A_b^T (c_clean - c)`` where
+    ``c = (A_b^T)^+ h`` are its coordinates along the rows of ``bases[layer][b]``
+    and ``c_clean`` the same coordinates of the clean pass. The component of ``h``
+    orthogonal to the basis is untouched, so an injection combined with this clamp
+    can act only outside the clamped span. To clamp an injection, enter the
+    injection first: hooks on one block run in registration order.
+
+    Args:
+        model: The model to hook.
+        layers: Band layer indices.
+        bases: ``{layer: Tensor[batch, m, d_model]}``, ``m`` basis vectors per row.
+        clean: Clean-pass block outputs ``{layer: Tensor[1 or batch, seq, d_model]}``,
+            from :func:`record_residuals`.
+        positions: Token positions to clamp, shared by all rows.
+    """
+
+    def __init__(
+        self,
+        model: LensModel,
+        layers: Sequence[int],
+        bases: Mapping[int, torch.Tensor],
+        clean: Mapping[int, torch.Tensor],
+        *,
+        positions: Positions = slice(None),
+    ) -> None:
+        super().__init__(model, layers, positions)
+        self._rows = slice(None)
+        self._clean = clean
+        self._bases: dict[int, tuple[torch.Tensor, torch.Tensor]] = {}
+        for layer in layers:
+            basis = bases[layer].float()
+            self._bases[layer] = (basis, torch.linalg.pinv(basis.transpose(1, 2)))
+
+    def _delta(self, layer: int, h: torch.Tensor) -> torch.Tensor:
+        basis, pinv = self._bases[layer]
+        if h.shape[0] != basis.shape[0]:
+            raise ValueError(f"batch has {h.shape[0]} rows but {basis.shape[0]} bases")
+        rows = h[:, self._positions].float()
+        clean = self._clean[layer][:, self._positions].float().to(rows.device)
+        coords = torch.einsum("btd,bmd->btm", rows, pinv)
+        wanted = torch.einsum("btd,bmd->btm", clean.expand(len(rows), -1, -1), pinv)
+        return torch.einsum("btm,bmd->btd", wanted - coords, basis)

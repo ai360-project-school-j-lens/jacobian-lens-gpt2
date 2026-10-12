@@ -11,10 +11,13 @@ from torch import nn
 from jlens.lens import JacobianLens
 from jlens.metrics import spearman_lens_vs_logits
 from jlens.workspace import (
+    ClampDirections,
     ClampSwap,
     InjectDirection,
     InjectDirections,
     final_norm_centers,
+    jspace_component,
+    lens_dictionary,
     lens_direction,
     lens_directions,
     record_residuals,
@@ -316,6 +319,23 @@ def test_inject_directions_matches_inject_direction_row_by_row(positions):
         assert torch.allclose(batched[row], single, atol=1e-5), row
 
 
+def test_inject_directions_with_reference_norms_does_not_compound():
+    """With a fixed reference, layer 2 adds ``strength * ref`` regardless of layer 1."""
+    model = _model()
+    lens = _lens(model)
+    ids = model.encode(PROMPT)
+    directions = {layer: lens_directions(model, lens, [7], layer) for layer in [1, 2]}
+    reference = {1: 3.0, 2: 5.0}
+    for strength in (0.5, 4.0):
+        with InjectDirections(model, [1], directions, [strength], reference_norms=reference):
+            after_one = record_residuals(model, ids, [2])[2]
+        with InjectDirections(model, [1, 2], directions, [strength], reference_norms=reference):
+            after_two = record_residuals(model, ids, [2])[2]
+        delta = (after_two - after_one)[0]
+        expected = strength * reference[2]
+        assert torch.allclose(delta.norm(dim=-1), torch.full((delta.shape[0],), expected), rtol=1e-4)
+
+
 def test_inject_directions_leaves_zero_strength_rows_unchanged():
     model = _model()
     lens = _lens(model)
@@ -340,6 +360,82 @@ def test_inject_directions_rejects_mismatched_batches():
         InjectDirections(model, [1], directions, [1.0, 1.0]),
     ):
         model.forward(ids)
+
+
+def test_lens_dictionary_rows_are_unit_lens_directions():
+    model = _model()
+    lens = _lens(model)
+    dictionary = lens_dictionary(model, lens, 1, chunk_size=7)
+    assert dictionary.shape == (32, model.d_model)
+    assert torch.allclose(dictionary.norm(dim=-1), torch.ones(32), atol=1e-5)
+    wanted = lens_direction(model, lens, 9, 1)
+    assert torch.allclose(dictionary[9], wanted / wanted.norm(), atol=1e-5)
+
+
+def test_jspace_component_recovers_a_sparse_nonnegative_combination():
+    generator = torch.Generator().manual_seed(0)
+    dictionary = torch.randn(64, 32, generator=generator)
+    dictionary = dictionary / dictionary.norm(dim=-1, keepdim=True)
+    x = torch.stack([
+        2.0 * dictionary[3] + 1.0 * dictionary[7] + 0.5 * dictionary[11],
+        1.5 * dictionary[40] + 0.8 * dictionary[2] + 0.3 * dictionary[63],
+    ])
+    component, support, coefficients = jspace_component(x, dictionary, k=3, refit_steps=2000)
+    assert [set(row) for row in support.tolist()] == [{3, 7, 11}, {40, 2, 63}]
+    assert torch.allclose(component, x, atol=1e-3)
+    assert (coefficients >= 0).all()
+
+
+def test_jspace_component_is_nonnegative_and_leaves_a_remainder():
+    generator = torch.Generator().manual_seed(1)
+    dictionary = torch.randn(64, 32, generator=generator)
+    dictionary = dictionary / dictionary.norm(dim=-1, keepdim=True)
+    x = torch.randn(5, 32, generator=generator)
+    component, support, coefficients = jspace_component(x, dictionary, k=4)
+    assert support.shape == coefficients.shape == (5, 4)
+    assert (coefficients >= 0).all()
+    rebuilt = (coefficients[:, :, None] * dictionary[support]).sum(1)
+    assert torch.allclose(component, rebuilt, atol=1e-5)
+    # A non-negative least-squares fit never increases the residual.
+    assert ((x - component).norm(dim=-1) <= x.norm(dim=-1) + 1e-5).all()
+    # A vector opposite to every atom it could pick has a zero component.
+    only = torch.zeros(1, 32)
+    only[0, 0] = 1.0
+    unit = torch.eye(32)[:2]
+    component, _, coefficients = jspace_component(-only, unit, k=1)
+    assert coefficients.eq(0).all() and component.eq(0).all()
+
+
+def test_clamp_directions_is_a_noop_on_the_clean_pass():
+    model = _model()
+    lens = _lens(model)
+    ids = model.encode(PROMPT).expand(2, -1)
+    clean = record_residuals(model, ids[:1], [1, 2])
+    plain = model.forward(ids).last_hidden_state.clone()
+    bases = {layer: lens_directions(model, lens, [3, 9, 5, 7], layer).reshape(2, 2, -1)
+             for layer in [1, 2]}
+    with ClampDirections(model, [1, 2], bases, clean):
+        patched = model.forward(ids).last_hidden_state
+    assert torch.allclose(plain, patched, atol=1e-5)
+
+
+def test_clamp_directions_cancels_an_injection_along_its_basis_only():
+    model = _model()
+    lens = _lens(model)
+    ids = model.encode(PROMPT).expand(2, -1)
+    clean = record_residuals(model, ids[:1], [1])
+    atom = lens_directions(model, lens, [3], 1)[0]
+    other = torch.randn(model.d_model, generator=torch.Generator().manual_seed(0))
+    other = other - (other @ atom) / (atom @ atom) * atom  # orthogonal to the basis
+    directions = {1: torch.stack([atom, other])}
+    bases = {1: atom.expand(2, 1, -1)}
+    with InjectDirections(model, [1], directions, [1.0, 1.0]), \
+            ClampDirections(model, [1], bases, clean):
+        patched = record_residuals(model, ids, [1])[1]
+    unit = atom / atom.norm()
+    assert torch.allclose(patched[0], clean[1][0], atol=1e-4)  # injection along the basis undone
+    delta = patched[1] - clean[1][0]
+    assert delta.norm() > 0.1 and (delta @ unit).abs().max() < 1e-4  # orthogonal one kept
 
 
 def test_random_mode_accepts_a_cpu_generator_on_a_cuda_model():
