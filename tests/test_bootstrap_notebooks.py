@@ -5,18 +5,24 @@ import json
 from pathlib import Path
 from unittest.mock import Mock
 
+import matplotlib.pyplot as plt
 import nbformat
 import numpy as np
 import pandas as pd
 import pytest
 from tokenizers import Tokenizer, models
 
-from jlens.bootstrap import retrieval_bootstrap, swap_bootstrap
+from jlens.bootstrap import (
+    retrieval_bootstrap,
+    retrieval_bootstrap_by_layer,
+    swap_bootstrap,
+)
 from jlens.position_benchmark import reduce_position_ranks
 
 ROOT = Path(__file__).resolve().parents[1]
 SWAP = ROOT / "notebooks/model_agnostic/token_swap/model_agnostic_token_swap_bootstrap.ipynb"
 RETRIEVAL = ROOT / "notebooks/model_agnostic/latent_bridge_v2_lens_benchmark_bootstrap.ipynb"
+LAYERWISE = RETRIEVAL.with_name("latent_bridge_v2_lens_benchmark_bootstrap_layerwise.ipynb")
 
 
 def cells(path):
@@ -140,17 +146,19 @@ def retrieval_state(cache, evals, forbidden):
         load_eval=lambda _, name: evals[name], DATASETS=["toy"],
         reduce_position_ranks=reduce_position_ranks, evaluate_position_ranks=forbidden,
         evaluate_paired_batched=forbidden, FORCE_RECOMPUTE=True,
-        BOOTSTRAP_OPTIONS=dict(n_resamples=100, seed=0), K_VALUES=[1, 10],
+        BOOTSTRAP_OPTIONS=dict(n_resamples=100, seed=0, confidence=0.95),
+        K_VALUES=[1, 10], K=1, LAYERWISE_SPANS=["subject"],
         CACHE_ROOT=cache.parent / "analysis",
     )
 
 
 @pytest.mark.parametrize("embedded,nested_config", [(False, False), (True, True)])
+@pytest.mark.parametrize("notebook", [RETRIEVAL, LAYERWISE])
 def test_retrieval_cache_only_uses_saved_identity_and_grouping(
-    tmp_path, forbid_models, embedded, nested_config,
+    tmp_path, forbid_models, embedded, nested_config, notebook,
 ):
     cache, evals = rank_cache(tmp_path, embedded=embedded, nested_config=nested_config)
-    source = cells(RETRIEVAL)
+    source = cells(notebook)
     state = retrieval_state(cache, evals, forbid_models)
     before = cache.read_bytes()
     for cell in ["ea930c3e", "benchmark-lens-source", "c1eb4c15", "e435187a",
@@ -174,7 +182,10 @@ def test_retrieval_cache_only_uses_saved_identity_and_grouping(
 
 
 @pytest.mark.parametrize("mismatch", ["sidecar", "grouping"])
-def test_retrieval_cache_rejects_mismatched_provenance(tmp_path, forbid_models, mismatch):
+@pytest.mark.parametrize("notebook", [RETRIEVAL, LAYERWISE])
+def test_retrieval_cache_rejects_mismatched_provenance(
+    tmp_path, forbid_models, mismatch, notebook,
+):
     cache, evals = rank_cache(tmp_path, embedded=False, nested_config=False)
     if mismatch == "sidecar":
         (tmp_path / "manifest.json").write_text("{}")
@@ -183,4 +194,72 @@ def test_retrieval_cache_rejects_mismatched_provenance(tmp_path, forbid_models, 
         evals["multihop-easy"][0]["group_id"] = "changed-group"
         message = "metadata changed"
     with pytest.raises(ValueError, match=message):
-        exec(cells(RETRIEVAL)["ea930c3e"], retrieval_state(cache, evals, forbid_models))
+        exec(cells(notebook)["ea930c3e"], retrieval_state(cache, evals, forbid_models))
+
+
+def test_layerwise_cache_plots_and_exports_match_without_model_calls(
+    tmp_path, monkeypatch, forbid_models, capsys,
+):
+    cache, evals = rank_cache(tmp_path, embedded=True, nested_config=True)
+    payload = pd.read_pickle(cache)
+    words = payload["anth_words"]
+    # Make one easy base a miss; the interval now reflects three groups,
+    # rather than counting its two phrasings as independent observations.
+    for index in words.index[words.item.str.startswith("base-1-")]:
+        words.at[index, "ranks"] = np.array([20, 2])
+    pd.to_pickle(payload, cache)
+    before = cache.read_bytes()
+    source = cells(LAYERWISE)
+    state = retrieval_state(cache, evals, forbid_models)
+    for cell in ["ea930c3e", "benchmark-lens-source", "c1eb4c15", "e435187a",
+                 "bootstrap-analysis-destination"]:
+        exec(source[cell], state)
+    state.update(
+        easy_words=state["anth_words"].merge(state["easy_metadata"], on="item"),
+        retrieval_bootstrap_by_layer=Mock(wraps=retrieval_bootstrap_by_layer),
+        bootstrap_ci=retrieval_bootstrap(
+            state["anth_words"], easy_metadata=state["easy_metadata"],
+            ks=[1, 10], **state["BOOTSTRAP_OPTIONS"],
+        ),
+        PRINT_LAYERWISE_CSV=True, plt=plt,
+        COLORS={"J-lens": "blue", "logit lens": "red"},
+    )
+    exec(source["bootstrap-layerwise-analysis"], state)
+    original = state["layerwise_ci"].copy()
+    calls = state["retrieval_bootstrap_by_layer"].call_count
+    exec(source["bootstrap-layerwise-analysis"], state)
+    assert state["retrieval_bootstrap_by_layer"].call_count == calls
+    pd.testing.assert_frame_equal(state["layerwise_ci"], original)
+    exec(source["bootstrap-layerwise-export"], state)
+    exported = pd.read_csv(state["RUN_DIR"] / "layerwise_plot_data.csv")
+    expected = state["layerwise_plot_data"]
+    pd.testing.assert_frame_equal(
+        exported, expected.replace({"": np.nan}).reset_index(drop=True),
+        check_dtype=False,
+    )
+    assert exported.model_id.eq("offline/cached-model").all()
+    assert exported.model_revision.eq("saved-commit").all()
+    assert exported.dtype.eq("torch.bfloat16").all()
+    assert exported.source_cache_sha256.eq(hashlib.sha256(before).hexdigest()).all()
+    assert set(exported.layer) == {0, 1} and set(exported.depth_percent) == {0, 100}
+    easy = exported[
+        exported.dataset.eq("multihop-easy") & exported.layer.eq(0)
+        & exported.statistic.eq("arm") & exported.arm.eq("J-lens")
+    ].iloc[0]
+    assert easy.estimate == pytest.approx(2 / 3)
+    assert easy.status == "ok" and easy.ci_low == 0 and easy.ci_high == 1
+    assert easy.n_units == easy.n_clusters == 3 and easy.n_items == 6
+    assert "export_schema,analysis_id,model_id" in capsys.readouterr().out
+
+    monkeypatch.setattr(plt, "show", Mock())
+    previous = set(plt.get_fignums())
+    try:
+        exec(source["bootstrap-layerwise-plots"], state)
+        assert plt.show.call_count == 2
+        for name in ["readouts", "differences"]:
+            for extension in ["png", "svg"]:
+                assert (state["RUN_DIR"] / f"bootstrap_layerwise_{name}.{extension}").is_file()
+    finally:
+        for number in set(plt.get_fignums()) - previous:
+            plt.close(number)
+    assert cache.read_bytes() == before

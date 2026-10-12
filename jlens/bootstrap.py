@@ -285,6 +285,49 @@ def retrieval_bootstrap(
     return pd.concat(tables, ignore_index=True) if tables else pd.DataFrame()
 
 
+def retrieval_bootstrap_by_layer(
+    words: pd.DataFrame,
+    *,
+    n_layers: int,
+    ks: Sequence[int] = (1, 2, 5, 10, 20, 50, 100),
+    easy_metadata: pd.DataFrame | None = None,
+    **bootstrap_options,
+) -> pd.DataFrame:
+    """Return pointwise retrieval intervals at each block, including the final one.
+
+    Each block uses :func:`retrieval_bootstrap` with a singleton layer selection,
+    retaining its word/item weights, paired differences, grouping, and coverage.
+    The same seed reuses cluster draws across blocks; these are pointwise CIs,
+    not a simultaneous band or intervals for a best-layer score. Only cached
+    ranks are used, and one layer is processed at a time to bound memory.
+
+    ``layer`` is zero-based and ``depth_fraction`` is layer / (n_layers - 1),
+    so the shared final block is 1. ``n_layers`` is explicit to preserve all
+    blocks even when every annotation is unsupported. Rank vectors must match
+    that count. Select one span/subset before calling this function.
+    """
+    if not isinstance(n_layers, int) or isinstance(n_layers, bool) or n_layers < 2:
+        raise ValueError("n_layers must be an integer >= 2")
+    if missing := {"lens", "ranks"} - set(words):
+        raise ValueError(f"Missing rank columns: {sorted(missing)}")
+    ranks = words.loc[words.lens.isin(["J-lens", "logit lens"]), "ranks"]
+    if any(np.asarray(rank).shape != (n_layers,) for rank in ranks.dropna()):
+        raise ValueError("Every supported rank vector must have n_layers entries")
+    tables = []
+    for layer in range(n_layers):
+        table = retrieval_bootstrap(
+            words, ks=ks, layers=[layer], easy_metadata=easy_metadata,
+            **bootstrap_options,
+        )
+        tables.append(table.assign(
+            layer=layer, n_layers=n_layers,
+            depth_fraction=layer / (n_layers - 1),
+            depth_percent=100 * layer / (n_layers - 1),
+            is_final_layer=layer == n_layers - 1, scope="single block",
+        ))
+    return pd.concat(tables, ignore_index=True)
+
+
 def introspection_bootstrap(
     results: pd.DataFrame,
     *,

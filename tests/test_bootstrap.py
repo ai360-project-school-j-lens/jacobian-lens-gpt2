@@ -8,6 +8,7 @@ from jlens.bootstrap import (
     introspection_bootstrap,
     paired_cluster_bootstrap,
     retrieval_bootstrap,
+    retrieval_bootstrap_by_layer,
     swap_bootstrap,
 )
 from jlens.evaluation import pass_at_k
@@ -152,6 +153,60 @@ def test_retrieval_matches_existing_item_weighting_and_auc():
     assert final[final.statistic.eq("difference")].estimate.eq(0).all()
 
 
+def test_layerwise_retrieval_uses_each_block_and_preserves_coverage():
+    words = rank_words()
+    result = retrieval_bootstrap_by_layer(
+        words, n_layers=3, ks=[1, 3, 10], n_resamples=1000,
+    )
+    top1 = result[result.metric.eq("pass_at_k") & result.k.eq(1)]
+    arms = top1[top1.statistic.eq("arm")].pivot(
+        index="layer", columns="arm", values="estimate",
+    )
+    np.testing.assert_allclose(arms["J-lens"], [0.5, 0, 1])
+    np.testing.assert_allclose(arms["logit lens"], [1 / 6, 0, 1])
+    assert result.n_units_total.eq(4).all() and result.n_units.eq(3).all()
+    assert result.n_words.eq(5).all() and result.n_words_scored.eq(4).all()
+    assert result.n_layers.eq(3).all()
+    np.testing.assert_allclose(result.depth_fraction, result.layer / 2)
+    np.testing.assert_allclose(result.depth_percent, result.layer * 50)
+    assert result.is_final_layer.equals(result.layer.eq(2))
+    assert result.scope.eq("single block").all()
+    final = result[result.is_final_layer & result.statistic.eq("difference")]
+    assert final.estimate.eq(0).all() and final.status.eq("degenerate").all()
+    assert final.ci_low.isna().all() and final.ci_high.isna().all()
+
+    # CI endpoints and AUC use the existing paired estimand at each block.
+    for layer in range(3):
+        expected = retrieval_bootstrap(
+            words, layers=[layer], ks=[1, 3, 10], n_resamples=1000,
+        )
+        actual = result.loc[result.layer.eq(layer), expected.columns].reset_index(drop=True)
+        pd.testing.assert_frame_equal(actual, expected)
+
+
+def test_layerwise_retrieval_retains_unsupported_layers():
+    result = retrieval_bootstrap_by_layer(
+        rank_words().assign(ranks=None), n_layers=3, ks=[1, 10], n_resamples=100,
+    )
+    assert set(result.layer) == {0, 1, 2}
+    assert result.status.eq("no_supported_units").all()
+    assert result[["estimate", "ci_low", "ci_high"]].isna().all().all()
+    assert result.n_units_total.eq(4).all() and result.n_units.eq(0).all()
+
+
+@pytest.mark.parametrize("n_layers", [1, 0, -1, 3.0, True])
+def test_layerwise_retrieval_rejects_invalid_layer_count(n_layers):
+    with pytest.raises(ValueError, match="n_layers"):
+        retrieval_bootstrap_by_layer(rank_words(), n_layers=n_layers)
+
+
+def test_layerwise_retrieval_rejects_truncated_rank_vectors():
+    words = rank_words()
+    words.at[0, "ranks"] = np.array([1, 2])
+    with pytest.raises(ValueError, match="n_layers entries"):
+        retrieval_bootstrap_by_layer(words, n_layers=3)
+
+
 @pytest.mark.parametrize("dataset", ["multihop-easy", "multihop-easy-fewshot"])
 def test_easy_phrasings_bases_groups_and_equal_family_weights(dataset):
     words, metadata = [], []
@@ -172,6 +227,14 @@ def test_easy_phrasings_bases_groups_and_equal_family_weights(dataset):
     assert score.n_items == 12 and score.n_units == 6 and score.n_clusters == 4
     assert score.ci_low == 0.5 and score.ci_high == 1
     assert score.n_strata == 2
+    layers = retrieval_bootstrap_by_layer(
+        pd.DataFrame(words), n_layers=2, ks=[1, 10],
+        easy_metadata=pd.DataFrame(metadata), n_resamples=1000,
+    )
+    first = layers.loc[layers.layer.eq(0), result.columns].reset_index(drop=True)
+    pd.testing.assert_frame_equal(first, result)
+    last = layers[layers.layer.eq(1) & layers.k.eq(1)]
+    assert last.estimate.eq(0).all() and last.status.eq("degenerate").all()
 
 
 def test_retrieval_rejects_mismatched_word_support_before_item_averaging():
