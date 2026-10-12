@@ -27,7 +27,8 @@ import logging
 import math
 import os
 import time
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 
 import torch
 
@@ -36,6 +37,32 @@ from jlens.lens import JacobianLens
 from jlens.protocol import LensModel
 
 logger = logging.getLogger(__name__)
+
+@dataclass(frozen=True)
+class FitProgress:
+    """Per-prompt progress passed to the ``metrics_callback`` of :func:`fit`.
+
+    Field names and definitions follow the upstream/Neuronpedia ``FitProgress``,
+    so convergence curves are comparable with published lens fits.
+    ``mean_rel_change`` is the relative Frobenius change of the running-mean
+    Jacobian contributed by this prompt, averaged over the fitted layers::
+
+        delta_n = mean_l ||J_bar_l(n) - J_bar_l(n-1)||_F / ||J_bar_l(n)||_F
+
+    It decays roughly like ``1/n``; ``nan`` for the first prompt.
+    ``identity_distance`` is ``||J_bar_late - I||_F / sqrt(d)`` for the highest
+    fitted layer.
+    """
+
+    prompt_idx: int
+    n_prompts: int
+    n_done: int
+    seq_len: int
+    n_valid_positions: int
+    elapsed_s: float
+    identity_distance: float
+    mean_rel_change: float
+
 
 #: Positions before this index are excluded from the Jacobian average; early
 #: positions act as attention sinks and have atypical residual statistics.
@@ -242,6 +269,7 @@ def fit(
     checkpoint_path: str | None = None,
     checkpoint_every: int | None = 1,
     resume: bool = True,
+    metrics_callback: Callable[[FitProgress], bool | None] | None = None,
 ) -> JacobianLens:
     """Fit ``J_l`` over a list of prompts and return a :class:`JacobianLens`.
 
@@ -266,6 +294,9 @@ def fit(
             checkpoint can be large (``len(source_layers) * d_model**2 * 4``
             bytes), so raise this for large models.
         resume: If ``True`` and ``checkpoint_path`` exists, resume from it.
+        metrics_callback: Called with a :class:`FitProgress` after every
+            accumulated prompt. Returning ``True`` stops the fit early; the
+            checkpoint is then written before returning.
 
     Returns:
         The fitted :class:`JacobianLens`.
@@ -355,25 +386,23 @@ def fit(
             next_idx = prompt_idx + 1
             continue
 
-        # Per-prompt diagnostics, max over source layers: the prompt's own
-        # Jacobian norm flags heavy-tailed outliers, and the relative shift
-        # in the running mean tracks convergence (falls ~1/n once settled).
+        # Per-prompt diagnostics: the prompt's own Jacobian norm flags
+        # heavy-tailed outliers, and the relative shift in the running mean
+        # tracks convergence (falls ~1/n once settled). The log reports the
+        # max over layers; the callback gets the upstream mean over layers.
         prompt_norm = max(per_prompt_J[l].norm().item() for l in source_layers) / sqrt_d
-        if n_done > 0:
-            mean_rel_change = max(
-                (
-                    (per_prompt_J[l] - jacobian_sum[l] / n_done).norm()
-                    / ((n_done + 1) * (jacobian_sum[l] / n_done).norm())
-                ).item()
-                for l in source_layers
-            )
-        else:
-            mean_rel_change = float("nan")
-
+        log_changes, rel_changes = [], []
         for layer in source_layers:
+            if n_done > 0:
+                prev_mean = jacobian_sum[layer] / n_done
+                step = (per_prompt_J[layer] - prev_mean).norm() / (n_done + 1)
+                new_mean = (jacobian_sum[layer] + per_prompt_J[layer]) / (n_done + 1)
+                log_changes.append((step / prev_mean.norm()).item())
+                rel_changes.append((step / new_mean.norm()).item())
             jacobian_sum[layer] += per_prompt_J[layer]
         n_done += 1
         next_idx = prompt_idx + 1
+        mean_rel_change = max(log_changes) if log_changes else float("nan")
 
         logger.info(
             "  prompt %d/%d  seq_len=%d n_valid=%d  %.0fs  "
@@ -386,6 +415,27 @@ def fit(
             prompt_norm,
             mean_rel_change,
         )
+        stop = False
+        if metrics_callback is not None:
+            late = source_layers[-1]
+            identity_distance = (
+                (jacobian_sum[late] / n_done - torch.eye(d_model)).norm().item() / sqrt_d
+            )
+            stop = bool(metrics_callback(FitProgress(
+                prompt_idx=prompt_idx,
+                n_prompts=len(prompts),
+                n_done=n_done,
+                seq_len=seq_len,
+                n_valid_positions=n_valid,
+                elapsed_s=time.perf_counter() - start_time,
+                identity_distance=identity_distance,
+                mean_rel_change=(
+                    sum(rel_changes) / len(rel_changes) if rel_changes else float("nan")
+                ),
+            )))
+        if stop:
+            logger.info("fit: metrics_callback stopped the fit after %d prompts", n_done)
+            break
         if checkpoint_every is not None and next_idx % checkpoint_every == 0:
             write_checkpoint()
 

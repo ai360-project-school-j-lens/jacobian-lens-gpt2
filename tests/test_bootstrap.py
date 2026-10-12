@@ -152,7 +152,8 @@ def test_retrieval_matches_existing_item_weighting_and_auc():
     assert final[final.statistic.eq("difference")].estimate.eq(0).all()
 
 
-def test_easy_phrasings_bases_groups_and_equal_family_weights():
+@pytest.mark.parametrize("dataset", ["multihop-easy", "multihop-easy-fewshot"])
+def test_easy_phrasings_bases_groups_and_equal_family_weights(dataset):
     words, metadata = [], []
     for family, bases in [("a", [0, 0, 1, 1]), ("b", [1, 1])]:
         for base, hit in enumerate(bases):
@@ -161,7 +162,7 @@ def test_easy_phrasings_bases_groups_and_equal_family_weights():
                 metadata.append(dict(item=item, family=family, base_id=f"{family}-{base}",
                                      group_id=f"{family}-{base // 2 if family == 'a' else base}"))
                 for arm in ["J-lens", "logit lens"]:
-                    words.append(dict(dataset="multihop-easy", item=item, word="x", role=0,
+                    words.append(dict(dataset=dataset, item=item, word="x", role=0,
                                       kind="intermediate", lens=arm,
                                       ranks=np.array([1 if hit and arm == "J-lens" else 10, 10])))
     result = retrieval_bootstrap(pd.DataFrame(words), ks=[1, 10],
@@ -231,4 +232,15 @@ def test_introspection_bootstrap_rejects_a_missing_arm():
     results = results[~(results["mode"].eq("random") & results.concept.eq("c3"))]
     with pytest.raises(ValueError, match="paired arms"):
         introspection_bootstrap(results, n_resamples=200)
+
+
+def test_introspection_bootstrap_accepts_other_arms():
+    results = introspection_results().replace({"mode": {"J": "J-space", "logit": "non-J-space"}})
+    table = introspection_bootstrap(
+        results, arms=["J-space", "non-J-space", "random"],
+        comparisons=[("J-space", "non-J-space"), ("non-J-space", "control")], n_resamples=200,
+    )
+    named = table[table.metric.eq("named")].set_index(["statistic", "arm", "reference"]).estimate
+    assert named["difference", "J-space", "non-J-space"] == 0.5
+    assert named["difference", "non-J-space", "control"] == 0.5
 

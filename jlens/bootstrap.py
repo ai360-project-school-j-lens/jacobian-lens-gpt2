@@ -187,6 +187,10 @@ def swap_bootstrap(results: pd.DataFrame, **bootstrap_options) -> pd.DataFrame:
     return pd.concat(tables, ignore_index=True) if tables else pd.DataFrame()
 
 
+#: Datasets with multihop-easy grouping: phrasings -> base items -> families.
+EASY_DATASETS = ("multihop-easy", "multihop-easy-fewshot")
+
+
 def retrieval_bootstrap(
     words: pd.DataFrame,
     *,
@@ -197,7 +201,8 @@ def retrieval_bootstrap(
 ) -> pd.DataFrame:
     """Bootstrap pass@k and normalized log-k AUC from paired cached rank vectors.
 
-    Preserve the benchmark's word -> item averaging. For multihop-easy, average
+    Preserve the benchmark's word -> item averaging. For multihop-easy and its
+    few-shot copy (:data:`EASY_DATASETS`, which share item names), average
     phrasings within base items, then base items within families, then families
     equally. Resample ``group_id`` clusters within families, preserving related
     base items as well as their phrasings. Coverage is conditional on supported
@@ -244,7 +249,7 @@ def retrieval_bootstrap(
         for j, (metric, k) in enumerate(metrics):
             scored = group.assign(value=values[:, j])
             prompt_scores = scored.groupby(["item", "lens"]).value.mean().reset_index()
-            if dataset == "multihop-easy":
+            if dataset in EASY_DATASETS:
                 required_metadata = ["item", "base_id", "group_id", "family"]
                 if easy_metadata is None or not set(required_metadata) <= set(easy_metadata):
                     raise ValueError("multihop-easy requires base/group/family metadata")
@@ -284,6 +289,10 @@ def introspection_bootstrap(
     results: pd.DataFrame,
     *,
     keys: Sequence[str] = ("span", "band", "strength"),
+    arms: Sequence[str] = ("J", "logit", "random"),
+    comparisons: Sequence[tuple[str, str]] = (
+        ("J", "logit"), ("J", "random"), ("J", "control"),
+    ),
     **bootstrap_options,
 ) -> pd.DataFrame:
     """Concept-clustered intervals for injected-thought report rates.
@@ -296,10 +305,12 @@ def introspection_bootstrap(
     so a contrast against ``control`` is the effect of injecting at all.
     Metrics are ``named`` (rank 1), ``top5`` (rank <= 5) and ``rr`` (1/rank);
     intervals are for their means over concepts (a median has none here).
-    Extra ``keys`` such as ``origin`` split the concepts into separate tables.
+    Extra ``keys`` such as ``origin`` split the concepts into separate tables;
+    ``arms`` and ``comparisons`` name other injected vectors (``control`` is
+    always added as an arm and may appear in comparisons).
     """
     keys = list(keys)
-    arms = ["J", "logit", "random"]
+    arms = list(arms)
     required = {*keys, "concept", "mode", "rank"}
     if "strength" not in keys:
         raise ValueError("keys must include strength")
@@ -338,8 +349,7 @@ def introspection_bootstrap(
             scores = paired.rename(columns={"concept": "unit", "mode": "arm", metric: "value"})
             scores = scores.assign(cluster=scores.unit, stratum="all")
             table = paired_cluster_bootstrap(
-                scores, arms=[*arms, "control"],
-                comparisons=[("J", "logit"), ("J", "random"), ("J", "control")],
+                scores, arms=[*arms, "control"], comparisons=list(comparisons),
                 **bootstrap_options,
             )
             tables.append(table.assign(

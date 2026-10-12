@@ -301,3 +301,36 @@ def test_out_of_range_layers_rejected():
             dim_batch=4,
             max_seq_len=64,
         )
+
+
+def test_fit_metrics_callback_and_early_stop(tmp_path):
+    """The callback sees upstream-style progress and can stop the fit."""
+    from jlens.fitting import FitProgress
+
+    model = TinyDecoder(n_layers=4, d_model=8)
+    prompts = ["abcdefghij " * 5, "klmnopqrst " * 5, "uvwxyzabcd " * 5]
+    seen: list[FitProgress] = []
+
+    def callback(progress):
+        seen.append(progress)
+        return progress.n_done == 2
+
+    checkpoint = str(tmp_path / "ckpt.pt")
+    lens = fit(model, prompts, source_layers=[0, 2], dim_batch=4, max_seq_len=64,
+               checkpoint_path=checkpoint, metrics_callback=callback)
+    assert lens.n_prompts == 2 and [p.n_done for p in seen] == [1, 2]
+    assert seen[0].mean_rel_change != seen[0].mean_rel_change  # nan
+    reference = fit(model, prompts[:2], source_layers=[0, 2], dim_batch=4, max_seq_len=64)
+    J1 = fit(model, prompts[:1], source_layers=[0, 2], dim_batch=4, max_seq_len=64)
+    expected = sum(
+        ((reference.jacobians[l] - J1.jacobians[l]).norm() / reference.jacobians[l].norm()).item()
+        for l in [0, 2]
+    ) / 2
+    assert seen[1].mean_rel_change == pytest.approx(expected, rel=1e-5)
+    eye = torch.eye(8)
+    assert seen[1].identity_distance == pytest.approx(
+        ((reference.jacobians[2] - eye).norm() / 8**0.5).item(), rel=1e-5
+    )
+    # The stop checkpoint resumes after prompt 2, not from the start.
+    state = torch.load(checkpoint, weights_only=True)
+    assert state["n_done"] == 2 and state["next_idx"] == 2

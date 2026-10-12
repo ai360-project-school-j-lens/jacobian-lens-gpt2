@@ -4,7 +4,7 @@
 of decoder-transformer residuals."""
 
 from jlens._logging import configure_logging
-from jlens.fitting import fit, jacobian_for_prompt
+from jlens.fitting import FitProgress, fit, jacobian_for_prompt
 from jlens.hf import HFLensModel, Layout, from_hf
 from jlens.hooks import ActivationRecorder
 from jlens.lens import JacobianLens
@@ -14,6 +14,7 @@ from jlens.sharded_fitting import benchmark_dim_batches, fit_sharded
 
 __all__ = [
     "ActivationRecorder",
+    "FitProgress",
     "HFLensModel",
     "JacobianLens",
     "Layout",
