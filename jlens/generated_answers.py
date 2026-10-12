@@ -36,6 +36,8 @@ _BOUNDARY = re.compile(
     re.I,
 )
 _PREFIX = re.compile(r"^(?:the answer is|answer is|answer\s*:|=)\s*", re.I)
+# A leading English article before another word ("the honey", "a dog"); a bare "A" stays.
+_ARTICLE = re.compile(r"^(?:the|an|a)\s+(?=\S)", re.I)
 _NUMERIC = re.compile(r"[+-]?(?:\d+(?:\.\d+)?|\d+/\d+)\Z")
 _NUMBER_WORDS = {
     synonyms(str(n))[1].replace("-", " "): n for n in range(100)
@@ -94,6 +96,7 @@ def score_answer(
     dataset: str,
     truncated: bool = False,
     aliases: Sequence[str] = (),
+    strip_articles: bool = False,
 ) -> dict:
     """Compare the first completed phrase, never a fragment or later mention.
 
@@ -106,6 +109,9 @@ def score_answer(
     including the final numeric RHS of an arithmetic equality (2 * 7 = 14).
     The equality must fit within the first completed phrase; working is not graded.
     Other answers require exact normalized equality or an explicit alias.
+    With ``strip_articles``, one leading "the"/"a"/"an" before another word is
+    removed after the answer prefix (for base models that continue "... is"
+    with an article); it is off by default so existing scores are unchanged.
     Unparsed/truncated answers count as misses, with reasons for manual review.
     """
     if isinstance(aliases, str) or any(not isinstance(a, str) for a in aliases):
@@ -116,6 +122,8 @@ def score_answer(
     text = _PREFIX.sub("", text, count=1).lstrip(" \t\"'“‘«`*")
     while opening := _HTML_OPEN.match(text):
         text = text[opening.end():].lstrip(" \t\r\n\"'“‘«`*")
+    if strip_articles:
+        text = _ARTICLE.sub("", text, count=1).lstrip(" \t\"'“‘«`*")
     boundary = _BOUNDARY.search(text)
     answer = (text[:boundary.start()] if boundary else text).strip().rstrip("`*’'")
     normalized = normalize_answer(answer)
@@ -317,8 +325,12 @@ def score_generations(
     generations: pd.DataFrame,
     *,
     aliases: Mapping[str, Mapping[str, Sequence[str]]] | None = None,
+    strip_articles: bool = False,
 ) -> pd.DataFrame:
-    """Score cached completions; aliases are keyed by dataset then exact target."""
+    """Score cached completions; aliases are keyed by dataset then exact target.
+
+    ``strip_articles`` is passed to :func:`score_answer` for every row.
+    """
     if generations.duplicated(_KEYS).any():
         raise ValueError("Expected one generation per dataset/item")
     rows = []
@@ -333,6 +345,7 @@ def score_generations(
                 row["generated_text"], row["target"], dataset=row["dataset"],
                 truncated=bool(row["generation_truncated"]),
                 aliases=(aliases or {}).get(row["dataset"], {}).get(row["target"], ()),
+                strip_articles=strip_articles,
             )
         rows.append({**row, **score})
     return pd.DataFrame(rows, columns=[

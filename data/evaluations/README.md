@@ -109,6 +109,26 @@ evaluators ignore the extra metadata; join grouping fields back by item name
 for grouped reporting. The fixed item order ensures the legacy half-list-offset
 control has a different bridge, but that control is not family-matched.
 
+## lens-eval-multihop-easy-fewshot
+
+[`lens-eval-multihop-easy-fewshot.json`](lens-eval-multihop-easy-fewshot.json), built by
+the executed [few-shot builder](../../notebooks/model_agnostic/multihop_easy/multihop_easy_fewshot_build.ipynb).
+
+A copy of `multihop-easy` for base models, which continue *"… is"* with a
+description instead of the answer. Every `prompt` is preceded by three solved
+items of the dataset, each `"{prompt} {target}."` on its own line; the original
+prompt is kept in `question`, the demonstrations' names in `demos`, and all
+annotations, splits and grouping fields are unchanged. Demonstrations come from
+the same relation and phrasing, then the same relation, then the same family,
+never from the same `base_id` or `group_id`; none contains the item's
+intermediate or target as a whole word, and their targets differ pairwise.
+`demo_relation_match` is false for 44 prompts whose relation has too few other
+base items (four animal relations, `country_continent` because few continents
+remain distinct, two arithmetic prompts). The readout position is still the
+final prompt token. Demonstrations add other bridges and answers to the context,
+so check controls and in-context copying when comparing lenses. Load it with
+`load_eval(REPO_DIR, "multihop-easy-fewshot")`.
+
 ## lens-eval-multilingual
 
 [`lens-eval-multilingual.json`](lens-eval-multilingual.json)

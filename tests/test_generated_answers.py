@@ -112,6 +112,32 @@ def test_aliases_and_truncated_fragments():
         score_answer("Atlantic", "Atlantic", dataset="multihop", aliases="Ocean")
 
 
+@pytest.mark.parametrize("text, target, expected", [
+    (" the honey.", "honey", True),
+    (" a dog, of course", "dog", True),
+    (" An apple.", "apple", True),
+    (" The answer is the Atlantic.", "Atlantic", True),
+    (" the the honey.", "honey", False),  # only one article is removed
+    (" theory.", "theory", True),  # not an article: no whitespace after "the"
+    (" A.", "A", True),  # a bare letter answer is kept
+    (" a sweet substance called honey.", "honey", False),  # no later-answer search
+    (' a "valley".', "valley", True),  # quotes after the article are stripped too
+])
+def test_strip_articles_option(text, target, expected):
+    result = score_answer(text, target, dataset="multihop-easy", strip_articles=True)
+    assert result["answer_correct"] is expected
+
+
+def test_strip_articles_is_off_by_default_and_passed_by_score_generations():
+    assert not score_answer(" the honey.", "honey", dataset="multihop-easy")["answer_correct"]
+    generations = pd.DataFrame([dict(
+        dataset="multihop-easy", item="bee", prompt="p", target="honey",
+        generated_text=" the honey.", generation_truncated=False,
+    )])
+    assert not score_generations(generations).answer_correct.iloc[0]
+    assert score_generations(generations, strip_articles=True).answer_correct.iloc[0]
+
+
 class CharTokenizer:
     bos_token_id, eos_token_id, pad_token_id = 0, 1, 2
     all_special_ids = [0, 1, 2]
