@@ -54,7 +54,7 @@ def load() -> pd.DataFrame:
 def plot(data: pd.DataFrame) -> plt.Figure:
     plt.rcParams.update({"font.size": 12, "axes.titlesize": 14, "axes.labelsize": 12,
                          "svg.fonttype": "none"})
-    fig, axes = plt.subplots(1, 3, figsize=(18, 6.2), sharey=True)
+    fig, axes = plt.subplots(1, 3, figsize=(18, 4.8), sharey=True)
     for ax, (dataset, title) in zip(axes, SPANS, strict=True):
         for model, (_, color) in MODELS.items():
             for arm, style in LENSES.items():
@@ -87,16 +87,10 @@ def plot(data: pd.DataFrame) -> plt.Figure:
     lens_handles = [Line2D([], [], color="#3d3c39", linewidth=2.2, linestyle=s, label=arm)
                     for arm, s in LENSES.items()]
     fig.legend(handles=model_handles + lens_handles, loc="upper center", ncol=5,
-               bbox_to_anchor=(0.5, 0.945), frameon=False, fontsize=13, handlelength=3)
+               bbox_to_anchor=(0.5, 0.935), frameon=False, fontsize=13, handlelength=3)
     fig.suptitle("Latent bridge: where the bridging country is readable, layer by layer",
                  x=0.5, y=0.995, fontsize=17, fontweight="bold")
-    fig.text(0.5, 0.008,
-             "Pass@10 at a single block (country word in the top 10, minimum over the span's "
-             "positions); shaded = pointwise 95% paired-bootstrap intervals (10,000 resamples), "
-             "not corrected across blocks.\nDotted line = final block, shared by both lenses. "
-             "Exact values from each model's layerwise notebook export; 530 latent-bridge prompts.",
-             ha="center", va="bottom", fontsize=11, color="#52514e", linespacing=1.4)
-    fig.tight_layout(rect=(0, 0.075, 1, 0.915))
+    fig.tight_layout(rect=(0, 0, 1, 0.905))
     return fig
 
 
