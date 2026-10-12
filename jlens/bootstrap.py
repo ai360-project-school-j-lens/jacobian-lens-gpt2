@@ -8,6 +8,8 @@ on a fixed model, lens, dataset, scoring rule, and intervention setting.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from concurrent.futures import ProcessPoolExecutor
+from functools import partial
 
 import numpy as np
 import pandas as pd
@@ -291,6 +293,7 @@ def retrieval_bootstrap_by_layer(
     n_layers: int,
     ks: Sequence[int] = (1, 2, 5, 10, 20, 50, 100),
     easy_metadata: pd.DataFrame | None = None,
+    workers: int = 1,
     **bootstrap_options,
 ) -> pd.DataFrame:
     """Return pointwise retrieval intervals at each block, including the final one.
@@ -305,7 +308,12 @@ def retrieval_bootstrap_by_layer(
     so the shared final block is 1. ``n_layers`` is explicit to preserve all
     blocks even when every annotation is unsupported. Rank vectors must match
     that count. Select one span/subset before calling this function.
+
+    Blocks are independent, so ``workers > 1`` runs them in that many processes;
+    each block keeps its own seeded draws, so the result does not depend on it.
     """
+    if not isinstance(workers, int) or isinstance(workers, bool) or workers < 1:
+        raise ValueError("workers must be a positive integer")
     if not isinstance(n_layers, int) or isinstance(n_layers, bool) or n_layers < 2:
         raise ValueError("n_layers must be an integer >= 2")
     if missing := {"lens", "ranks"} - set(words):
@@ -313,19 +321,30 @@ def retrieval_bootstrap_by_layer(
     ranks = words.loc[words.lens.isin(["J-lens", "logit lens"]), "ranks"]
     if any(np.asarray(rank).shape != (n_layers,) for rank in ranks.dropna()):
         raise ValueError("Every supported rank vector must have n_layers entries")
-    tables = []
-    for layer in range(n_layers):
-        table = retrieval_bootstrap(
-            words, ks=ks, layers=[layer], easy_metadata=easy_metadata,
-            **bootstrap_options,
-        )
-        tables.append(table.assign(
-            layer=layer, n_layers=n_layers,
-            depth_fraction=layer / (n_layers - 1),
-            depth_percent=100 * layer / (n_layers - 1),
-            is_final_layer=layer == n_layers - 1, scope="single block",
-        ))
+    one_block = partial(
+        _retrieval_block, words, n_layers=n_layers, ks=ks,
+        easy_metadata=easy_metadata, **bootstrap_options,
+    )
+    if workers == 1:
+        tables = [one_block(layer) for layer in range(n_layers)]
+    else:
+        # Contiguous chunks: each worker unpickles the rank table once.
+        chunk = -(-n_layers // workers)
+        with ProcessPoolExecutor(max_workers=min(workers, n_layers)) as pool:
+            tables = list(pool.map(one_block, range(n_layers), chunksize=chunk))
     return pd.concat(tables, ignore_index=True)
+
+
+def _retrieval_block(words, layer, *, n_layers, ks, easy_metadata, **bootstrap_options):
+    table = retrieval_bootstrap(
+        words, ks=ks, layers=[layer], easy_metadata=easy_metadata, **bootstrap_options,
+    )
+    return table.assign(
+        layer=layer, n_layers=n_layers,
+        depth_fraction=layer / (n_layers - 1),
+        depth_percent=100 * layer / (n_layers - 1),
+        is_final_layer=layer == n_layers - 1, scope="single block",
+    )
 
 
 def introspection_bootstrap(

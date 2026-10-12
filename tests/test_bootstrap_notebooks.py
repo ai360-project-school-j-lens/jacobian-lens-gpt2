@@ -147,7 +147,7 @@ def retrieval_state(cache, evals, forbidden):
         reduce_position_ranks=reduce_position_ranks, evaluate_position_ranks=forbidden,
         evaluate_paired_batched=forbidden, FORCE_RECOMPUTE=True,
         BOOTSTRAP_OPTIONS=dict(n_resamples=100, seed=0, confidence=0.95),
-        K_VALUES=[1, 10], K=1, LAYERWISE_SPANS=["subject"],
+        K_VALUES=[1, 10], K=1, LAYERWISE_SPANS=["subject"], LAYERWISE_WORKERS=2,
         CACHE_ROOT=cache.parent / "analysis",
     )
 
@@ -256,6 +256,9 @@ def test_layerwise_cache_plots_and_exports_match_without_model_calls(
     try:
         exec(source["bootstrap-layerwise-plots"], state)
         assert plt.show.call_count == 2
+        exec(source["bootstrap-layerwise-latent-profiles"], state)
+        assert plt.show.call_count == 3
+        assert (state["RUN_DIR"] / "latent_bridge_layer_profiles.png").is_file()
         for name in ["readouts", "differences"]:
             for extension in ["png", "svg"]:
                 assert (state["RUN_DIR"] / f"bootstrap_layerwise_{name}.{extension}").is_file()
