@@ -278,3 +278,71 @@ def retrieval_bootstrap(
                 aggregation=aggregation,
             ))
     return pd.concat(tables, ignore_index=True) if tables else pd.DataFrame()
+
+
+def introspection_bootstrap(
+    results: pd.DataFrame,
+    *,
+    keys: Sequence[str] = ("span", "band", "strength"),
+    **bootstrap_options,
+) -> pd.DataFrame:
+    """Concept-clustered intervals for injected-thought report rates.
+
+    ``results`` has one row per concept and setting, with columns ``concept``,
+    ``mode`` (``J``, ``logit``, ``random``), ``rank`` (the concept's next-token
+    rank at the readout), and ``keys``; ``strength`` 0 rows are the shared
+    no-injection control. Each injected setting is paired, concept by concept,
+    with the three direction arms and the control of the same span and band,
+    so a contrast against ``control`` is the effect of injecting at all.
+    Metrics are ``named`` (rank 1), ``top5`` (rank <= 5) and ``rr`` (1/rank);
+    intervals are for their means over concepts (a median has none here).
+    Extra ``keys`` such as ``origin`` split the concepts into separate tables.
+    """
+    keys = list(keys)
+    arms = ["J", "logit", "random"]
+    required = {*keys, "concept", "mode", "rank"}
+    if "strength" not in keys:
+        raise ValueError("keys must include strength")
+    if missing := required - set(results):
+        raise ValueError(f"Missing introspection columns: {sorted(missing)}")
+    data = results.loc[results["mode"].isin(arms), list(required)].copy()
+    if data.isna().any().any():
+        raise ValueError("Introspection identities and ranks cannot be null")
+    if not (data["rank"] >= 1).all():
+        raise ValueError("Ranks must be positive")
+    if data.duplicated([*keys, "concept", "mode"]).any():
+        raise ValueError("Duplicate concept/setting/arm")
+    if not data.groupby([*keys, "concept"])["mode"].nunique().eq(len(arms)).all():
+        raise ValueError("Every concept must have all paired arms")
+    data["named"] = data["rank"].eq(1).astype(float)
+    data["top5"] = data["rank"].le(5).astype(float)
+    data["rr"] = 1.0 / data["rank"]
+    metrics = ["named", "top5", "rr"]
+
+    setting = [k for k in keys if k != "strength"]
+    control = data[data.strength.eq(0)]
+    if (control.groupby([*setting, "concept"])[metrics].nunique() > 1).any().any():
+        raise ValueError("The strength-0 control must not depend on the arm")
+    control = control.drop_duplicates([*setting, "concept"]).assign(mode="control")
+    injected = data[data.strength.ne(0)]
+    tables = []
+    for key, group in injected.groupby(keys, sort=True):
+        key = dict(zip(keys, key, strict=True))
+        baseline = control
+        for column in setting:
+            baseline = baseline[baseline[column].eq(key[column])]
+        paired = pd.concat([group, baseline[baseline.concept.isin(group.concept)]])
+        if paired.concept.nunique() != baseline.concept.nunique():
+            raise ValueError(f"Control and injected concepts differ at {key}")
+        for metric in metrics:
+            scores = paired.rename(columns={"concept": "unit", "mode": "arm", metric: "value"})
+            scores = scores.assign(cluster=scores.unit, stratum="all")
+            table = paired_cluster_bootstrap(
+                scores, arms=[*arms, "control"],
+                comparisons=[("J", "logit"), ("J", "random"), ("J", "control")],
+                **bootstrap_options,
+            )
+            tables.append(table.assign(
+                **key, metric=metric, aggregation="equal concept mean",
+            ))
+    return pd.concat(tables, ignore_index=True) if tables else pd.DataFrame()

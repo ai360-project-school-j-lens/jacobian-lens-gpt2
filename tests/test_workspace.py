@@ -13,8 +13,10 @@ from jlens.metrics import spearman_lens_vs_logits
 from jlens.workspace import (
     ClampSwap,
     InjectDirection,
+    InjectDirections,
     final_norm_centers,
     lens_direction,
+    lens_directions,
     record_residuals,
     swap_basis,
 )
@@ -276,6 +278,70 @@ def test_spearman_ignores_duplicate_candidates():
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="needs a CUDA device")
+@pytest.mark.parametrize("mode", ["J", "logit"])
+def test_lens_directions_stack_lens_direction(mode):
+    model = _model()
+    lens = _lens(model)
+    batched = lens_directions(model, lens, [7, 3, 7], 1, mode=mode)
+    for row, token_id in enumerate([7, 3, 7]):
+        single = lens_direction(model, lens, token_id, 1, mode=mode)
+        assert torch.allclose(batched[row], single, atol=1e-6)
+
+
+@pytest.mark.parametrize("positions", [slice(None), slice(1, 3), [0, 2]])
+def test_inject_directions_matches_inject_direction_row_by_row(positions):
+    """One batched pass equals one single-prompt pass per (token, mode, strength)."""
+    model = _model()
+    lens = _lens(model)
+    layers = [1, 2]
+    ids = model.encode(PROMPT)
+    trials = [(7, "J", 0.5), (3, "logit", 2.0), (7, "J", 0.0), (11, "J", 1.0)]
+    directions = {
+        layer: torch.stack([
+            lens_direction(model, lens, token_id, layer, mode=mode)
+            for token_id, mode, _ in trials
+        ])
+        for layer in layers
+    }
+    strengths = [strength for *_, strength in trials]
+    batch = ids.expand(len(trials), -1)
+    with InjectDirections(model, layers, directions, strengths, positions=positions):
+        batched = model.forward(batch).last_hidden_state
+    for row, (token_id, mode, strength) in enumerate(trials):
+        with InjectDirection(
+            model, lens, layers, token_id, strength=strength, mode=mode,
+            positions=positions,
+        ):
+            single = model.forward(ids).last_hidden_state[0]
+        assert torch.allclose(batched[row], single, atol=1e-5), row
+
+
+def test_inject_directions_leaves_zero_strength_rows_unchanged():
+    model = _model()
+    lens = _lens(model)
+    ids = model.encode(PROMPT).expand(2, -1)
+    plain = model.forward(ids).last_hidden_state.clone()
+    directions = {1: lens_directions(model, lens, [7, 3], 1)}
+    with InjectDirections(model, [1], directions, [0.0, 1.0]):
+        patched = model.forward(ids).last_hidden_state
+    assert torch.equal(patched[0], plain[0])
+    assert not torch.allclose(patched[1], plain[1])
+
+
+def test_inject_directions_rejects_mismatched_batches():
+    model = _model()
+    lens = _lens(model)
+    directions = {1: lens_directions(model, lens, [7, 3], 1)}
+    with pytest.raises(ValueError, match="expected"):
+        InjectDirections(model, [1], directions, [1.0, 1.0, 1.0])
+    ids = model.encode(PROMPT).expand(3, -1)
+    with (
+        pytest.raises(ValueError, match="strengths"),
+        InjectDirections(model, [1], directions, [1.0, 1.0]),
+    ):
+        model.forward(ids)
+
+
 def test_random_mode_accepts_a_cpu_generator_on_a_cuda_model():
     """A ``torch.Generator`` is device-bound; seeding a CUDA draw from a CPU one must
     still work, so a run stays reproducible without knowing where the model lives."""
@@ -306,8 +372,12 @@ def test_random_mode_accepts_a_cpu_generator_on_a_cuda_model():
         lambda model, lens, clean: ClampSwap(
             model, lens, [1], 3, 9, alpha=1.0, clean=clean, positions=slice(2, 5)
         ),
+        lambda model, lens, clean: InjectDirections(
+            model, [1], {1: lens_directions(model, lens, [7], 1)}, [1.0],
+            positions=slice(2, 5),
+        ),
     ],
-    ids=["inject", "swap"],
+    ids=["inject", "swap", "inject-batched"],
 )
 def test_band_hooks_are_a_noop_when_the_position_slice_selects_nothing(make):
     """A KV-cached decode step passes one new token, so a prompt-position slice is empty.

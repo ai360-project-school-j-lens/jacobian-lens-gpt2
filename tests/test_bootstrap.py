@@ -5,6 +5,7 @@ import pandas as pd
 import pytest
 
 from jlens.bootstrap import (
+    introspection_bootstrap,
     paired_cluster_bootstrap,
     retrieval_bootstrap,
     swap_bootstrap,
@@ -177,3 +178,57 @@ def test_retrieval_rejects_mismatched_word_support_before_item_averaging():
     words.at[0, "ranks"] = None
     with pytest.raises(ValueError, match="annotation support"):
         retrieval_bootstrap(words, ks=[1, 10])
+
+
+def introspection_results(n_concepts=8):
+    """J names every concept at strength 1, logit half of them, random none."""
+    rows = []
+    for c in range(n_concepts):
+        origin = "original" if c % 2 else "added"
+        for mode in ["J", "logit", "random"]:
+            rows.append(dict(span="turn", band="1-3", strength=0.0, mode=mode,
+                             concept=f"c{c}", origin=origin, rank=100 + c))
+            rank = {"J": 1, "logit": 1 if c < n_concepts // 2 else 7, "random": 500}[mode]
+            rows.append(dict(span="turn", band="1-3", strength=1.0, mode=mode,
+                             concept=f"c{c}", origin=origin, rank=rank))
+    return pd.DataFrame(rows)
+
+
+def test_introspection_bootstrap_pairs_arms_with_the_shared_control():
+    table = introspection_bootstrap(introspection_results(), n_resamples=500)
+    assert set(table.strength) == {1.0}  # the control is an arm, not a setting
+    named = table[table.metric.eq("named")].set_index(["statistic", "arm", "reference"]).estimate
+    assert named["arm", "J", ""] == 1.0
+    assert named["arm", "logit", ""] == 0.5
+    assert named["arm", "random", ""] == 0.0
+    assert named["arm", "control", ""] == 0.0
+    assert named["difference", "J", "control"] == 1.0
+    assert named["difference", "J", "logit"] == 0.5
+    rr = table[table.metric.eq("rr") & table.statistic.eq("arm") & table.arm.eq("control")]
+    assert rr.estimate.iloc[0] == pytest.approx(np.mean([1 / (100 + c) for c in range(8)]))
+    status = table[table.metric.eq("named")].set_index(["statistic", "arm", "reference"]).status
+    assert status["arm", "J", ""] == "degenerate"  # all named: no interval, not certainty
+    assert status["difference", "J", "logit"] == "ok"
+
+
+def test_introspection_bootstrap_splits_by_extra_keys():
+    table = introspection_bootstrap(
+        introspection_results(), keys=["span", "band", "strength", "origin"], n_resamples=200,
+    )
+    assert set(table.origin) == {"added", "original"}
+    assert table.groupby("origin").n_units.first().eq(4).all()
+
+
+def test_introspection_bootstrap_rejects_an_arm_dependent_control():
+    results = introspection_results()
+    results.loc[results.strength.eq(0) & results["mode"].eq("J") & results.concept.eq("c0"), "rank"] = 1
+    with pytest.raises(ValueError, match="control"):
+        introspection_bootstrap(results, n_resamples=200)
+
+
+def test_introspection_bootstrap_rejects_a_missing_arm():
+    results = introspection_results()
+    results = results[~(results["mode"].eq("random") & results.concept.eq("c3"))]
+    with pytest.raises(ValueError, match="paired arms"):
+        introspection_bootstrap(results, n_resamples=200)
+

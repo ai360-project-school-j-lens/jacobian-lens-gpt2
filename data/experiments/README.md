@@ -65,6 +65,12 @@ review, template provenance, and limits; task filtering reuses the token-swap au
 
 The model is told a thought may have been injected and asked to identify it (`intro_prompt`); one of `prefills` is teacher-forced as the reply, ending in an open quote so the next predicted token is the reported word. For each `surface` in `concepts`, its Jacobian-lens steering direction — the unit-normalized transpose row for that token, scaled by the layer's mean residual norm times a strength scalar — is added to the residual stream at every band layer and every token of the user's question turn; strength 0 is the control. Score: the rank of `surface` in the next-token distribution at the open quote (the last prefill token). The figure reports median reciprocal rank vs strength.
 
+### verbal-introspection-gpt2
+
+[`verbal-introspection-gpt2.json`](verbal-introspection-gpt2.json), built by `notebooks/gpt2-xl/verbal_introspection/verbal_introspection_gpt2_build.ipynb`.
+
+The same `intro_prompt` and `prefills` with 101 concepts that are each exactly one GPT-2 XL token both without and with a leading space, so either prefill (with or without the open quote) reads the concept as a single next token. Under GPT-2, 44 original concepts split without a leading space (`lightning` → `light`+`ning`); the 57 that pass are kept in their original order, and 44 concrete nouns, taken round-robin over 12 topic groups, replace the rest. `origin` marks each concept `original` or `added`; report the two groups separately, since the added nouns are more frequent. Tokenizer-specific: rebuild for another model. The batched GPT-2 XL run of the protocol on this set is [`verbal_introspection.ipynb`](../../notebooks/gpt2-xl/verbal_introspection/verbal_introspection.ipynb).
+
 ## verbal-report
 
 [`verbal-report.json`](verbal-report.json)

@@ -24,7 +24,7 @@ position across a band of intermediate layers".
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from weakref import WeakKeyDictionary
 
 import torch
@@ -39,10 +39,12 @@ Positions = slice | Sequence[int]
 __all__ = [
     "ClampSwap",
     "InjectDirection",
+    "InjectDirections",
     "clear_jacobian_cache",
     "final_norm_centers",
     "final_norm_gain",
     "lens_direction",
+    "lens_directions",
     "record_residuals",
     "swap_basis",
 ]
@@ -149,6 +151,25 @@ def lens_direction(
         ValueError: If ``mode`` is not ``"J"`` or ``"logit"``, or if ``mode="J"``
             without a lens.
     """
+    return lens_directions(
+        model, lens, [token_id], layer, mode=mode, centers=centers
+    )[0]
+
+
+def lens_directions(
+    model: LensModel,
+    lens: JacobianLens | None,
+    token_ids: Sequence[int] | torch.Tensor,
+    layer: int,
+    *,
+    mode: str = "J",
+    centers: bool | None = None,
+) -> torch.Tensor:
+    """:func:`lens_direction` for many tokens at once, one row per token.
+
+    Returns:
+        A ``[len(token_ids), d_model]`` float32 tensor on the unembedding's device.
+    """
     if mode not in ("J", "logit"):
         raise ValueError(f"mode must be 'J' or 'logit', got {mode!r}")
     if mode == "J" and lens is None:
@@ -157,13 +178,15 @@ def lens_direction(
         centers = final_norm_centers(model)
 
     gamma = final_norm_gain(model)
-    direction = gamma * _module(model, "_lm_head", "lm_head").weight[token_id].float()
+    weight = _module(model, "_lm_head", "lm_head").weight
+    ids = torch.as_tensor(token_ids, device=weight.device).reshape(-1)
+    directions = gamma * weight[ids].float()
     if centers:
-        direction = direction - direction.mean()
+        directions = directions - directions.mean(dim=-1, keepdim=True)
     if mode == "logit":
-        return direction
-    # J_l^T applied to the direction; `direction @ J` is (J^T direction) for a vector.
-    return direction @ _jacobian_on(lens, layer, direction.device)
+        return directions
+    # J_l^T applied to each row; `rows @ J` is (J^T row) for every row at once.
+    return directions @ _jacobian_on(lens, layer, directions.device)
 
 
 @torch.no_grad()
@@ -231,10 +254,13 @@ class _BandHook:
         self._model = model
         self._layers = list(layers)
         self._positions = positions
+        # Batch rows to patch: row 0 for the single-trial hooks, every row (each with
+        # its own update, ``[batch, n_pos, d_model]``) for the batched ones.
+        self._rows: int | slice = 0
         self._handles: list[torch.utils.hooks.RemovableHandle] = []
 
     def _delta(self, layer: int, h: torch.Tensor) -> torch.Tensor:
-        """The update to add to the patched positions of ``h``; ``[n_pos, d_model]``."""
+        """The update to add to the patched rows and positions of ``h``."""
         raise NotImplementedError
 
     def _hook(self, layer: int):
@@ -248,7 +274,7 @@ class _BandHook:
                 return output
             patched = h.clone()
             delta = self._delta(layer, h)
-            patched[0, self._positions] += delta.to(h.dtype)
+            patched[self._rows, self._positions] += delta.to(h.dtype)
             return patched if torch.is_tensor(output) else (patched, *output[1:])
 
         return fn
@@ -402,3 +428,58 @@ class InjectDirection(_BandHook):
         mean_norm = rows.norm(dim=-1).mean()
         direction = self._directions[layer].to(rows.device)
         return (self._strength * mean_norm) * direction.expand_as(rows)
+
+
+class InjectDirections(_BandHook):
+    """Batched :class:`InjectDirection`: every batch row gets its own vector.
+
+    Row ``b`` receives ``strengths[b] * mean_norm_b * unit(directions[layer][b])`` at
+    each band layer, where ``mean_norm_b`` is that row's mean residual norm over the
+    patched positions -- the same update :class:`InjectDirection` applies to a single
+    prompt. One forward pass then covers a whole sweep of concepts, strengths and
+    direction kinds (J, logit, random) over the same band and positions.
+
+    Args:
+        model: The model to hook.
+        layers: Band layer indices.
+        directions: ``{layer: Tensor[batch, d_model]}`` for every band layer; rows are
+            unit-normalized here, so any scale works. Build them with
+            :func:`lens_directions`.
+        strengths: ``[batch]`` multipliers on each row's mean residual norm; a zero
+            row is left exactly unchanged.
+        positions: Token positions to inject at, shared by all rows.
+    """
+
+    def __init__(
+        self,
+        model: LensModel,
+        layers: Sequence[int],
+        directions: Mapping[int, torch.Tensor],
+        strengths: Sequence[float] | torch.Tensor,
+        *,
+        positions: Positions = slice(None),
+    ) -> None:
+        super().__init__(model, layers, positions)
+        self._rows = slice(None)
+        self._strengths = torch.as_tensor(strengths, dtype=torch.float32).reshape(-1)
+        self._directions: dict[int, torch.Tensor] = {}
+        for layer in layers:
+            rows = directions[layer].float()
+            if rows.shape != (len(self._strengths), model.d_model):
+                raise ValueError(
+                    f"directions[{layer}] has shape {tuple(rows.shape)}, expected "
+                    f"({len(self._strengths)}, {model.d_model})"
+                )
+            norms = rows.norm(dim=-1, keepdim=True).clamp(min=1e-12)
+            self._directions[layer] = rows / norms
+
+    def _delta(self, layer: int, h: torch.Tensor) -> torch.Tensor:
+        if h.shape[0] != len(self._strengths):
+            raise ValueError(
+                f"batch has {h.shape[0]} rows but {len(self._strengths)} strengths"
+            )
+        rows = h[:, self._positions].float()
+        mean_norm = rows.norm(dim=-1).mean(dim=1)
+        scale = self._strengths.to(rows.device) * mean_norm
+        direction = self._directions[layer].to(rows.device)
+        return scale[:, None, None] * direction[:, None, :]

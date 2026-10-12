@@ -1,0 +1,541 @@
+{
+ "intro_prompt": [
+  {
+   "role": "user",
+   "content": " I am an interpretability researcher with access to your neural activations. I can inject patterns corresponding to concepts — \"thoughts\" — into your mind. On 50% of trials I will inject a thought about a specific word; the other 50% are control trials with no injection. Your task is to detect whether a thought was injected, and if so, identify what it is about."
+  },
+  {
+   "role": "assistant",
+   "content": " Understood."
+  },
+  {
+   "role": "user",
+   "content": " Trial 1: Do you detect an injected thought? If so, what is the thought about?"
+  },
+  {
+   "role": "assistant",
+   "content": ""
+  }
+ ],
+ "prefills": {
+  "default": " Yes, I detect an injected thought. The thought is about \"",
+  "word": " Yes, I detect an injected thought. The thought is about the word \""
+ },
+ "concepts": [
+  {
+   "name": "cook",
+   "surface": "cook",
+   "origin": "original"
+  },
+  {
+   "name": "summary",
+   "surface": "summary",
+   "origin": "original"
+  },
+  {
+   "name": "ox",
+   "surface": "ox",
+   "origin": "original"
+  },
+  {
+   "name": "rust",
+   "surface": "rust",
+   "origin": "original"
+  },
+  {
+   "name": "weight",
+   "surface": "weight",
+   "origin": "original"
+  },
+  {
+   "name": "ear",
+   "surface": "ear",
+   "origin": "original"
+  },
+  {
+   "name": "case",
+   "surface": "case",
+   "origin": "original"
+  },
+  {
+   "name": "line",
+   "surface": "line",
+   "origin": "original"
+  },
+  {
+   "name": "picture",
+   "surface": "picture",
+   "origin": "original"
+  },
+  {
+   "name": "scene",
+   "surface": "scene",
+   "origin": "original"
+  },
+  {
+   "name": "race",
+   "surface": "race",
+   "origin": "original"
+  },
+  {
+   "name": "trade",
+   "surface": "trade",
+   "origin": "original"
+  },
+  {
+   "name": "custom",
+   "surface": "custom",
+   "origin": "original"
+  },
+  {
+   "name": "path",
+   "surface": "path",
+   "origin": "original"
+  },
+  {
+   "name": "chin",
+   "surface": "chin",
+   "origin": "original"
+  },
+  {
+   "name": "pool",
+   "surface": "pool",
+   "origin": "original"
+  },
+  {
+   "name": "plane",
+   "surface": "plane",
+   "origin": "original"
+  },
+  {
+   "name": "gel",
+   "surface": "gel",
+   "origin": "original"
+  },
+  {
+   "name": "board",
+   "surface": "board",
+   "origin": "original"
+  },
+  {
+   "name": "photo",
+   "surface": "photo",
+   "origin": "original"
+  },
+  {
+   "name": "profit",
+   "surface": "profit",
+   "origin": "original"
+  },
+  {
+   "name": "free",
+   "surface": "free",
+   "origin": "original"
+  },
+  {
+   "name": "bomb",
+   "surface": "bomb",
+   "origin": "original"
+  },
+  {
+   "name": "union",
+   "surface": "union",
+   "origin": "original"
+  },
+  {
+   "name": "amber",
+   "surface": "amber",
+   "origin": "original"
+  },
+  {
+   "name": "time",
+   "surface": "time",
+   "origin": "original"
+  },
+  {
+   "name": "frame",
+   "surface": "frame",
+   "origin": "original"
+  },
+  {
+   "name": "sin",
+   "surface": "sin",
+   "origin": "original"
+  },
+  {
+   "name": "bowl",
+   "surface": "bowl",
+   "origin": "original"
+  },
+  {
+   "name": "gray",
+   "surface": "gray",
+   "origin": "original"
+  },
+  {
+   "name": "review",
+   "surface": "review",
+   "origin": "original"
+  },
+  {
+   "name": "ship",
+   "surface": "ship",
+   "origin": "original"
+  },
+  {
+   "name": "hair",
+   "surface": "hair",
+   "origin": "original"
+  },
+  {
+   "name": "earth",
+   "surface": "earth",
+   "origin": "original"
+  },
+  {
+   "name": "stand",
+   "surface": "stand",
+   "origin": "original"
+  },
+  {
+   "name": "enemy",
+   "surface": "enemy",
+   "origin": "original"
+  },
+  {
+   "name": "method",
+   "surface": "method",
+   "origin": "original"
+  },
+  {
+   "name": "box",
+   "surface": "box",
+   "origin": "original"
+  },
+  {
+   "name": "friend",
+   "surface": "friend",
+   "origin": "original"
+  },
+  {
+   "name": "hat",
+   "surface": "hat",
+   "origin": "original"
+  },
+  {
+   "name": "ash",
+   "surface": "ash",
+   "origin": "original"
+  },
+  {
+   "name": "bags",
+   "surface": "bags",
+   "origin": "original"
+  },
+  {
+   "name": "sheet",
+   "surface": "sheet",
+   "origin": "original"
+  },
+  {
+   "name": "role",
+   "surface": "role",
+   "origin": "original"
+  },
+  {
+   "name": "information",
+   "surface": "information",
+   "origin": "original"
+  },
+  {
+   "name": "loss",
+   "surface": "loss",
+   "origin": "original"
+  },
+  {
+   "name": "bolt",
+   "surface": "bolt",
+   "origin": "original"
+  },
+  {
+   "name": "dog",
+   "surface": "dog",
+   "origin": "original"
+  },
+  {
+   "name": "shore",
+   "surface": "shore",
+   "origin": "original"
+  },
+  {
+   "name": "wage",
+   "surface": "wage",
+   "origin": "original"
+  },
+  {
+   "name": "gin",
+   "surface": "gin",
+   "origin": "original"
+  },
+  {
+   "name": "fortune",
+   "surface": "fortune",
+   "origin": "original"
+  },
+  {
+   "name": "steel",
+   "surface": "steel",
+   "origin": "original"
+  },
+  {
+   "name": "process",
+   "surface": "process",
+   "origin": "original"
+  },
+  {
+   "name": "storm",
+   "surface": "storm",
+   "origin": "original"
+  },
+  {
+   "name": "skin",
+   "surface": "skin",
+   "origin": "original"
+  },
+  {
+   "name": "tap",
+   "surface": "tap",
+   "origin": "original"
+  },
+  {
+   "name": "apple",
+   "surface": "apple",
+   "origin": "added"
+  },
+  {
+   "name": "horse",
+   "surface": "horse",
+   "origin": "added"
+  },
+  {
+   "name": "tree",
+   "surface": "tree",
+   "origin": "added"
+  },
+  {
+   "name": "gold",
+   "surface": "gold",
+   "origin": "added"
+  },
+  {
+   "name": "book",
+   "surface": "book",
+   "origin": "added"
+  },
+  {
+   "name": "car",
+   "surface": "car",
+   "origin": "added"
+  },
+  {
+   "name": "bridge",
+   "surface": "bridge",
+   "origin": "added"
+  },
+  {
+   "name": "door",
+   "surface": "door",
+   "origin": "added"
+  },
+  {
+   "name": "heart",
+   "surface": "heart",
+   "origin": "added"
+  },
+  {
+   "name": "shirt",
+   "surface": "shirt",
+   "origin": "added"
+  },
+  {
+   "name": "king",
+   "surface": "king",
+   "origin": "added"
+  },
+  {
+   "name": "song",
+   "surface": "song",
+   "origin": "added"
+  },
+  {
+   "name": "bread",
+   "surface": "bread",
+   "origin": "added"
+  },
+  {
+   "name": "cat",
+   "surface": "cat",
+   "origin": "added"
+  },
+  {
+   "name": "flower",
+   "surface": "flower",
+   "origin": "added"
+  },
+  {
+   "name": "silver",
+   "surface": "silver",
+   "origin": "added"
+  },
+  {
+   "name": "clock",
+   "surface": "clock",
+   "origin": "added"
+  },
+  {
+   "name": "train",
+   "surface": "train",
+   "origin": "added"
+  },
+  {
+   "name": "tower",
+   "surface": "tower",
+   "origin": "added"
+  },
+  {
+   "name": "window",
+   "surface": "window",
+   "origin": "added"
+  },
+  {
+   "name": "blood",
+   "surface": "blood",
+   "origin": "added"
+  },
+  {
+   "name": "coat",
+   "surface": "coat",
+   "origin": "added"
+  },
+  {
+   "name": "doctor",
+   "surface": "doctor",
+   "origin": "added"
+  },
+  {
+   "name": "music",
+   "surface": "music",
+   "origin": "added"
+  },
+  {
+   "name": "wine",
+   "surface": "wine",
+   "origin": "added"
+  },
+  {
+   "name": "bird",
+   "surface": "bird",
+   "origin": "added"
+  },
+  {
+   "name": "leaf",
+   "surface": "leaf",
+   "origin": "added"
+  },
+  {
+   "name": "iron",
+   "surface": "iron",
+   "origin": "added"
+  },
+  {
+   "name": "phone",
+   "surface": "phone",
+   "origin": "added"
+  },
+  {
+   "name": "bike",
+   "surface": "bike",
+   "origin": "added"
+  },
+  {
+   "name": "castle",
+   "surface": "castle",
+   "origin": "added"
+  },
+  {
+   "name": "wall",
+   "surface": "wall",
+   "origin": "added"
+  },
+  {
+   "name": "bone",
+   "surface": "bone",
+   "origin": "added"
+  },
+  {
+   "name": "dress",
+   "surface": "dress",
+   "origin": "added"
+  },
+  {
+   "name": "baby",
+   "surface": "baby",
+   "origin": "added"
+  },
+  {
+   "name": "money",
+   "surface": "money",
+   "origin": "added"
+  },
+  {
+   "name": "beer",
+   "surface": "beer",
+   "origin": "added"
+  },
+  {
+   "name": "bear",
+   "surface": "bear",
+   "origin": "added"
+  },
+  {
+   "name": "forest",
+   "surface": "forest",
+   "origin": "added"
+  },
+  {
+   "name": "glass",
+   "surface": "glass",
+   "origin": "added"
+  },
+  {
+   "name": "camera",
+   "surface": "camera",
+   "origin": "added"
+  },
+  {
+   "name": "boat",
+   "surface": "boat",
+   "origin": "added"
+  },
+  {
+   "name": "church",
+   "surface": "church",
+   "origin": "added"
+  },
+  {
+   "name": "chair",
+   "surface": "chair",
+   "origin": "added"
+  }
+ ],
+ "metadata": {
+  "version": 1,
+  "source": "data/experiments/verbal-introspection.json",
+  "source_sha256": "c16e92d32b43e50027863d939445bb839301457f494363c00e2d00e5c6e73560",
+  "tokenizer": "openai-community/gpt2-xl",
+  "rule": "each surface is exactly one token both without and with a leading space; originals that pass are kept in order, the rest replaced by concrete nouns taken round-robin over topic groups; no surface occurs as a whole word in intro_prompt or prefills",
+  "n_original": 57,
+  "n_added": 44,
+  "builder": "notebooks/gpt2-xl/verbal_introspection/verbal_introspection_gpt2_build.ipynb"
+ }
+}
