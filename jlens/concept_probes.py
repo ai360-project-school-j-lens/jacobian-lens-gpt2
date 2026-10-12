@@ -57,7 +57,8 @@ def prepare_probe_examples(model: LensModel, concepts: Sequence[str], templates:
     """Locate each complete concept mention via tokenizer character offsets.
 
     The last token of the mention is the readout, including for multi-token
-    concepts. Offset IDs must match the adapter's special-token policy exactly.
+    concepts. Offset IDs must match the adapter's special-token policy exactly,
+    including the BOS policy of an ``ExplicitPromptModel``.
     Unsupported offsets, merged boundaries, unknown tokens, and truncation are
     reported as exclusions; none uses a guessed token position.
     """
@@ -66,6 +67,9 @@ def prepare_probe_examples(model: LensModel, concepts: Sequence[str], templates:
         raise ValueError("Concept labels must be nonempty and unique")
     rows = []
     special = set(getattr(tokenizer, "all_special_ids", []) or [])
+    # An ExplicitPromptModel's BOS policy decides the special tokens, as in encode_ids.
+    bos_policy = getattr(model, "bos_policy", None)
+    special_tokens = {} if bos_policy is None else {"add_special_tokens": bos_policy == "tokenizer"}
     for concept in concepts:
         for template in templates.to_dict("records"):
             text = template["template"].format(x=concept)
@@ -74,9 +78,12 @@ def prepare_probe_examples(model: LensModel, concepts: Sequence[str], templates:
             reason, position, span_tokens, ids = "", -1, 0, []
             try:
                 encoded = tokenizer(text, return_offsets_mapping=True, truncation=True,
-                                    max_length=max_length + 1)
-                offsets = encoded["offset_mapping"]
+                                    max_length=max_length + 1, **special_tokens)
+                offsets = list(encoded["offset_mapping"])
                 ids = list(encoded["input_ids"])
+                if bos_policy == "prepend":
+                    ids.insert(0, tokenizer.bos_token_id)
+                    offsets.insert(0, (0, 0))
                 encode_ids = getattr(model, "encode_ids", None)
                 canonical = (encode_ids(text, max_length=max_length + 1) if encode_ids else
                              model.encode(text, max_length=max_length + 1)[0].tolist())

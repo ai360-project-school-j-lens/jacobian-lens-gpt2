@@ -17,6 +17,7 @@ from jlens.workspace import (
     InjectDirections,
     final_norm_centers,
     jspace_component,
+    jspace_pursuit,
     lens_dictionary,
     lens_direction,
     lens_directions,
@@ -404,6 +405,27 @@ def test_jspace_component_is_nonnegative_and_leaves_a_remainder():
     unit = torch.eye(32)[:2]
     component, _, coefficients = jspace_component(-only, unit, k=1)
     assert coefficients.eq(0).all() and component.eq(0).all()
+
+
+def test_jspace_pursuit_snapshots_match_the_component_and_its_explained_norm():
+    generator = torch.Generator().manual_seed(2)
+    dictionary = torch.randn(64, 32, generator=generator)
+    dictionary = dictionary / dictionary.norm(dim=-1, keepdim=True)
+    x = torch.randn(6, 32, generator=generator)
+    result = jspace_pursuit(x, dictionary, 5, snapshots=[2, 5])
+    assert result.explained.shape == result.support.shape == (6, 5)
+    assert set(result.snapshots) == {2, 5}
+    for k, (component, coefficients) in result.snapshots.items():
+        wanted, support, wanted_coefficients = jspace_component(x, dictionary, k)
+        assert torch.equal(support, result.support[:, :k])
+        torch.testing.assert_close(component, wanted)
+        torch.testing.assert_close(coefficients, wanted_coefficients)
+        explained = 1 - (x - component).square().sum(-1) / x.square().sum(-1)
+        torch.testing.assert_close(result.explained[:, k - 1], explained)
+    # Refitting non-negative least squares on a growing support never loses norm.
+    assert (result.explained.diff(dim=1) >= -1e-5).all()
+    with pytest.raises(ValueError, match="snapshots"):
+        jspace_pursuit(x, dictionary, 2, snapshots=[3])
 
 
 def test_clamp_directions_is_a_noop_on_the_clean_pass():

@@ -25,6 +25,7 @@ position across a band of intermediate layers".
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from weakref import WeakKeyDictionary
 
 import torch
@@ -41,10 +42,12 @@ __all__ = [
     "ClampSwap",
     "InjectDirection",
     "InjectDirections",
+    "JSpacePursuit",
     "clear_jacobian_cache",
     "final_norm_centers",
     "final_norm_gain",
     "jspace_component",
+    "jspace_pursuit",
     "lens_dictionary",
     "lens_direction",
     "lens_directions",
@@ -529,6 +532,84 @@ def lens_dictionary(
     return torch.cat(rows)
 
 
+@dataclass(frozen=True)
+class JSpacePursuit:
+    """Trajectory of :func:`jspace_pursuit`.
+
+    Attributes:
+        explained: ``[n, k]`` fraction of each row's squared norm explained after
+            each added atom, ``1 - |x - component|^2 / |x|^2``.
+        support: ``[n, k]`` atom indices in selection order.
+        snapshots: ``{K: (component [n, d_model], coefficients [n, K])}`` after
+            ``K`` atoms, for each requested ``K``.
+    """
+
+    explained: torch.Tensor
+    support: torch.Tensor
+    snapshots: dict[int, tuple[torch.Tensor, torch.Tensor]]
+
+
+@torch.no_grad()
+def jspace_pursuit(
+    vectors: torch.Tensor,
+    dictionary: torch.Tensor,
+    k: int = 16,
+    *,
+    refit_steps: int = 300,
+    snapshots: Sequence[int] = (),
+) -> JSpacePursuit:
+    """Sparse non-negative J-space components of each row, by greedy pursuit.
+
+    Each of ``k`` steps adds the dictionary atom with the largest positive
+    correlation with the current residual (atoms already chosen are excluded),
+    then refits the non-negative coefficients on the whole support by projected
+    gradient descent (non-negative least squares). The component is the
+    resulting non-negative combination of J-lens vectors -- the paper's
+    projection onto its sparse cone -- and ``vectors - component`` is the
+    non-J-space remainder. Rows are independent and processed as one batch, so
+    the caller bounds memory (``[n, k, d_model]`` atoms, ``[n, vocab]`` scores)
+    by chunking rows.
+
+    Args:
+        vectors: ``[n, d_model]`` vectors to decompose.
+        dictionary: ``[vocab, d_model]`` unit-norm atoms, from :func:`lens_dictionary`.
+        k: Number of atoms per row.
+        refit_steps: Projected-gradient iterations per refit.
+        snapshots: Support sizes ``1..k`` at which to keep the component and
+            coefficients.
+    """
+    if k < 1 or any(not 1 <= size <= k for size in snapshots):
+        raise ValueError("k must be positive and snapshots within 1..k")
+    x = vectors.float()
+    atoms_all = dictionary.to(device=x.device, dtype=torch.float32)
+    n = x.shape[0]
+    norm2 = x.square().sum(-1).clamp(min=1e-12)
+    support = torch.empty(n, 0, dtype=torch.long, device=x.device)
+    coefficients = torch.empty(n, 0, device=x.device)
+    component = torch.zeros_like(x)
+    explained = torch.empty(n, k, device=x.device)
+    kept = {}
+    for step in range(k):
+        scores = (x - component) @ atoms_all.T
+        if support.shape[1]:
+            scores.scatter_(1, support, -torch.inf)
+        support = torch.cat([support, scores.argmax(dim=1, keepdim=True)], dim=1)
+        del scores
+        atoms = atoms_all[support]  # [n, s, d]
+        gram = atoms @ atoms.transpose(1, 2)
+        target = (atoms @ x[..., None]).squeeze(-1)
+        step_size = 1.0 / torch.linalg.eigvalsh(gram)[:, -1:].clamp(min=1e-12)
+        coefficients = torch.cat([coefficients, torch.zeros(n, 1, device=x.device)], 1)
+        for _ in range(refit_steps):
+            gradient = (gram @ coefficients[..., None]).squeeze(-1) - target
+            coefficients = (coefficients - step_size * gradient).clamp(min=0)
+        component = (coefficients[:, None, :] @ atoms).squeeze(1)
+        explained[:, step] = 1 - (x - component).square().sum(-1) / norm2
+        if step + 1 in snapshots:
+            kept[step + 1] = (component.clone(), coefficients.clone())
+    return JSpacePursuit(explained, support, kept)
+
+
 @torch.no_grad()
 def jspace_component(
     vectors: torch.Tensor,
@@ -537,15 +618,9 @@ def jspace_component(
     *,
     refit_steps: int = 300,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    """Sparse non-negative J-space component of each row, by greedy pursuit.
+    """Sparse non-negative J-space component of each row after ``k`` atoms.
 
-    Each of ``k`` steps adds the dictionary atom with the largest positive
-    correlation with the current residual, then refits the non-negative
-    coefficients on the whole support by projected gradient descent (non-negative
-    least squares). The component is the resulting non-negative combination of
-    ``k`` J-lens vectors -- the paper's projection onto its sparse cone -- and
-    ``vectors - component`` is the non-J-space remainder. Rows are independent and
-    processed as one batch.
+    The final state of :func:`jspace_pursuit`.
 
     Args:
         vectors: ``[n, d_model]`` vectors to decompose.
@@ -557,27 +632,9 @@ def jspace_component(
         ``(component, support, coefficients)`` of shapes ``[n, d_model]``,
         ``[n, k]`` (atom indices in selection order) and ``[n, k]`` (non-negative).
     """
-    x = vectors.float()
-    atoms_all = dictionary.to(device=x.device, dtype=torch.float32)
-    n = x.shape[0]
-    support = torch.empty(n, 0, dtype=torch.long, device=x.device)
-    coefficients = torch.empty(n, 0, device=x.device)
-    component = torch.zeros_like(x)
-    for _ in range(k):
-        scores = (x - component) @ atoms_all.T
-        if support.shape[1]:
-            scores.scatter_(1, support, -torch.inf)
-        support = torch.cat([support, scores.argmax(dim=1, keepdim=True)], dim=1)
-        atoms = atoms_all[support]  # [n, s, d]
-        gram = atoms @ atoms.transpose(1, 2)
-        target = (atoms @ x[..., None]).squeeze(-1)
-        step = 1.0 / torch.linalg.eigvalsh(gram)[:, -1:].clamp(min=1e-12)
-        coefficients = torch.cat([coefficients, torch.zeros(n, 1, device=x.device)], 1)
-        for _ in range(refit_steps):
-            gradient = (gram @ coefficients[..., None]).squeeze(-1) - target
-            coefficients = (coefficients - step * gradient).clamp(min=0)
-        component = (coefficients[:, None, :] @ atoms).squeeze(1)
-    return component, support, coefficients
+    result = jspace_pursuit(vectors, dictionary, k, refit_steps=refit_steps, snapshots=[k])
+    component, coefficients = result.snapshots[k]
+    return component, result.support, coefficients
 
 
 class ClampDirections(_BandHook):

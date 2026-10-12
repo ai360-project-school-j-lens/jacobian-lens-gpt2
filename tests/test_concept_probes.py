@@ -21,6 +21,7 @@ from jlens.concept_probes import (
     probe_fingerprint,
 )
 from jlens.hooks import ActivationRecorder
+from jlens.strict_scoring import ExplicitPromptModel
 from jlens.swap_experiment import (
     ConceptDirections,
     experiment_fingerprint,
@@ -78,6 +79,18 @@ def test_multi_token_span_bos_and_batched_features(model_type):
         for layer in [1, 2]:
             torch.testing.assert_close(features[layer][i], recorder.activations[layer][0, row["position"]])
     assert all(not block._forward_hooks for block in model.layers)
+
+
+@pytest.mark.parametrize("bos_policy", ["none", "prepend", "tokenizer"])
+def test_probe_spans_follow_the_explicit_bos_policy(bos_policy):
+    model = ExplicitPromptModel(probe_model(), bos_policy=bos_policy)
+    examples = examples_for(model)
+    assert examples.valid.all()
+    bos = model.tokenizer.bos_token_id
+    for row in examples.to_dict("records"):
+        assert row["input_ids"] == model.encode_ids(row["text"], max_length=128)
+        assert row["input_ids"].count(bos) == (bos_policy != "none")
+        assert model.tokenizer.decode(row["input_ids"][row["position"]]) == row["concept"].split()[-1]
 
 
 def test_bad_probe_spans_are_reported():
