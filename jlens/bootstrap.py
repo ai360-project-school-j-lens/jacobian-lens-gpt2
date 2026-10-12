@@ -8,6 +8,8 @@ on a fixed model, lens, dataset, scoring rule, and intervention setting.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from concurrent.futures import ProcessPoolExecutor
+from functools import partial
 
 import numpy as np
 import pandas as pd
@@ -315,6 +317,7 @@ def retrieval_bootstrap_by_layer(
     n_layers: int,
     ks: Sequence[int] = (1, 2, 5, 10, 20, 50, 100),
     easy_metadata: pd.DataFrame | None = None,
+    workers: int = 1,
     n_resamples: int = 10_000,
     confidence: float = 0.95,
     seed: int = 0,
@@ -334,11 +337,17 @@ def retrieval_bootstrap_by_layer(
     8 * n_resamples * n_layers * (len(ks) + 1) * 3 bytes per dataset/kind, plus
     temporary arrays for quantiles and aggregated cluster scores.
 
+    ``workers > 1`` parallelizes independent dataset/kind groups. Every group
+    still computes all layers and metrics together; a single group uses no
+    process pool. The seeded results do not depend on the worker count.
+
     ``layer`` is zero-based and ``depth_fraction`` is layer / (n_layers - 1),
     so the shared final block is 1. ``n_layers`` is explicit to preserve all
     blocks even when every annotation is unsupported. Rank vectors must match
     that count. Select one span/subset before calling this function.
     """
+    if not isinstance(workers, int) or isinstance(workers, bool) or workers < 1:
+        raise ValueError("workers must be a positive integer")
     if not isinstance(n_layers, int) or isinstance(n_layers, bool) or n_layers < 2:
         raise ValueError("n_layers must be an integer >= 2")
     _validate_bootstrap_options(n_resamples, confidence, batch_size)
@@ -350,12 +359,24 @@ def retrieval_bootstrap_by_layer(
             raise ValueError("Every supported rank vector must have n_layers entries")
         if not np.isfinite(array).all() or (array < 1).any():
             raise ValueError("Expected finite positive one-dimensional rank vectors")
+    groups = list(data.groupby(["dataset", "kind"], sort=True))
+    if workers > 1 and len(groups) > 1:
+        one_group = partial(
+            retrieval_bootstrap_by_layer, n_layers=n_layers, ks=ks,
+            easy_metadata=easy_metadata, workers=1, n_resamples=n_resamples,
+            confidence=confidence, seed=seed, batch_size=batch_size,
+        )
+        with ProcessPoolExecutor(max_workers=min(workers, len(groups))) as pool:
+            tables = list(pool.map(one_group, (group for _, group in groups)))
+        return pd.concat(tables, ignore_index=True).sort_values(
+            "layer", kind="stable",
+        ).reset_index(drop=True)
     metrics = [("pass_at_k", k) for k in ks] + [("log_k_auc", None)]
     features = list(range(n_layers * len(metrics)))
     comparisons = [(2 * feature, 2 * feature + 1) for feature in features]
     n_values = 2 * len(features)
     rows = []
-    for (dataset, kind), group in data.groupby(["dataset", "kind"], sort=True):
+    for (dataset, kind), group in groups:
         supported = group.ranks.notna().to_numpy()
         ranks = np.full((len(group), n_layers), np.nan)
         if supported.any():

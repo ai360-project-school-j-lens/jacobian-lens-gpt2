@@ -186,6 +186,16 @@ def test_layerwise_retrieval_uses_each_block_and_preserves_coverage():
         pd.testing.assert_frame_equal(actual, expected)
 
 
+def test_layerwise_retrieval_is_identical_in_parallel():
+    options = dict(n_layers=3, ks=[1, 3, 10], n_resamples=500)
+    words = pd.concat([rank_words(), rank_words().assign(kind="control")], ignore_index=True)
+    serial = retrieval_bootstrap_by_layer(words, **options)
+    parallel = retrieval_bootstrap_by_layer(words, workers=2, **options)
+    pd.testing.assert_frame_equal(parallel, serial)
+    with pytest.raises(ValueError, match="workers"):
+        retrieval_bootstrap_by_layer(rank_words(), workers=0, **options)
+
+
 def test_layerwise_retrieval_retains_unsupported_layers():
     result = retrieval_bootstrap_by_layer(
         rank_words().assign(ranks=None), n_layers=3, ks=[1, 10], n_resamples=100,
