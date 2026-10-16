@@ -2,6 +2,14 @@
 
 > **Reference implementation.** Not maintained and not accepting contributions.
 
+## Poster (AI360, Team 22)
+
+Our replication and extension of the J-Lens on GPT-2 XL, Gemma 4 31B and Gemma 4 E4B:
+intermediate concept retrieval, J-space token swaps, and cross-layer CKA
+structure. Full-resolution PDF: [`poster/poster.pdf`](poster/poster.pdf).
+
+[![AI360 Team 22 poster](poster/poster.png)](poster/poster.pdf)
+
 Companion code for [**Verbalizable Representations Form a Global Workspace in
 Language Models**](https://transformer-circuits.pub/2026/workspace/index.html).
 
